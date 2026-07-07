@@ -1,0 +1,46 @@
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- PHP / Laravel (apps/api) ---
+apps/api/vendor/
+apps/api/node_modules/
+apps/api/.env
+apps/api/.env.backup
+apps/api/.env.production
+apps/api/.phpunit.result.cache
+apps/api/.phpunit.cache
+apps/api/storage/*.key
+apps/api/storage/pail
+apps/api/public/build
+apps/api/public/hot
+apps/api/public/storage
+apps/api/public/fonts-manifest.dev.json
+apps/api/auth.json
+apps/api/_ide_helper.php
+apps/api/Homestead.json
+apps/api/Homestead.yaml
+*.log
+
+# --- Node / Next.js (apps/web) ---
+apps/web/node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/build/
+apps/web/coverage/
+apps/web/.env*
+apps/web/.vercel
+apps/web/*.tsbuildinfo
+apps/web/next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- Editors ---
+.vscode
+.idea
+.nova
+.zed
+.cursor/
+.codex
