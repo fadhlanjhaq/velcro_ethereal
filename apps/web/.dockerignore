@@ -1,0 +1,27 @@
+# Version control / Docker meta
+.git
+.gitignore
+.dockerignore
+Dockerfile
+
+# Secrets & local env
+.env
+.env.*
+!.env.example
+
+# Installed / built inside the image
+node_modules
+.next
+out
+build
+
+# Logs, caches, editor / OS noise
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+.vscode
+.idea
+
+# Not needed for the build
+README.md

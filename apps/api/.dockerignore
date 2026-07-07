@@ -1,0 +1,41 @@
+# Version control / Docker meta
+.git
+.gitignore
+.gitattributes
+.dockerignore
+Dockerfile
+
+# Secrets & local env (never bake real env into the image)
+.env
+.env.*
+!.env.example
+
+# Installed by Composer inside the image
+/vendor
+/node_modules
+
+# Public build artifacts / storage symlink (regenerated at deploy time)
+/public/build
+/public/hot
+/public/storage
+
+# Local-only runtime data (logs, compiled views, sessions, file cache).
+/storage/*.key
+/storage/logs/*.log
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*.php
+.phpunit.result.cache
+/.phpunit.cache
+
+# Always keep the storage/ skeleton so Laravel has its writable dirs at runtime.
+!**/.gitignore
+
+# Editor / OS noise
+.idea
+.vscode
+.DS_Store
+
+# Not needed at runtime
+/tests
+README.md

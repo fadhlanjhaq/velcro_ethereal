@@ -1,0 +1,126 @@
+# =============================================================================
+# Velcro Ethereal — pre-deploy validation stack
+#
+# This is NOT the day-to-day dev environment (that stays native: Herd for
+# Laravel, `npm run dev` for Next.js). It exists to validate that the
+# PRODUCTION builds run correctly before deploying to a VPS, so it optimizes
+# for production parity, not iteration speed — images are built in full, there
+# are no source bind-mounts / hot reload.
+#
+# Run:   docker compose up --build
+# Reset: docker compose down -v   (also drops the mysql volume)
+#
+# DB / cache wiring for the `api` service is injected below (see `environment`)
+# so the developer's apps/api/.env can keep its native (Herd/sqlite) values.
+# The MySQL credentials are defined once via ${MYSQL_*} variables (with
+# defaults) and reused by both `api` and `db`, keeping them in sync. Override
+# them via the shell or a root .env if you want different values.
+# =============================================================================
+
+name: velcro-ethereal
+
+services:
+  # --- Next.js storefront (standalone production server) --------------------
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    expose:
+      - "3000"
+    networks:
+      - velcro_net
+    restart: unless-stopped
+
+  # --- Laravel API (php-fpm) ------------------------------------------------
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    # App-level config (APP_KEY, APP_NAME, mail, etc.) comes from the real .env.
+    env_file:
+      - ./apps/api/.env
+    # Infrastructure wiring overrides .env so containers talk to each other and
+    # do not depend on the native (127.0.0.1 / sqlite) values.
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_DATABASE: ${MYSQL_DATABASE:-velcro}
+      DB_USERNAME: ${MYSQL_USER:-velcro}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-velcro_secret}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+    # Laravel's public/ is shared read-only to the proxy so nginx can serve
+    # Laravel static assets and resolve the front-controller path.
+    volumes:
+      - public_assets:/var/www/html/public
+    expose:
+      - "9000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - velcro_net
+    restart: unless-stopped
+
+  # --- MySQL 8 --------------------------------------------------------------
+  db:
+    image: mysql:8
+    # Root password & database name follow the same ${MYSQL_*} values the api
+    # service connects with, so Laravel and MySQL always agree.
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_secret}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-velcro}
+      MYSQL_USER: ${MYSQL_USER:-velcro}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-velcro_secret}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - velcro_net
+    restart: unless-stopped
+
+  # --- Redis ----------------------------------------------------------------
+  redis:
+    image: redis:alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - velcro_net
+    restart: unless-stopped
+
+  # --- Nginx reverse proxy (single entry point) -----------------------------
+  proxy:
+    image: nginx:alpine
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - public_assets:/var/www/html/public:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - web
+      - api
+    networks:
+      - velcro_net
+    restart: unless-stopped
+
+networks:
+  velcro_net:
+    driver: bridge
+
+volumes:
+  db_data:
+  public_assets:
