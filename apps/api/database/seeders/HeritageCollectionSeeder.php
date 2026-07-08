@@ -48,6 +48,15 @@ class HeritageCollectionSeeder extends Seeder
                 'sku_initials' => 'APJ',
                 'description' => 'Jaket bermotif burung merak (aureus/emas), terinspirasi keindahannya.',
                 'story' => 'Aureus (emas) — terinspirasi keindahan burung merak',
+                // FOTO ASLI — satu-satunya dari 4 produk yang punya foto asli.
+                // Path mengarah ke aset hasil rename semantik di apps/web/public
+                // (Milestone 5, Part C): front (sort_order 0) + peacock back (1).
+                // 3 produk lain sengaja TANPA foto (product_images kosong) —
+                // jangan diisi placeholder agar API jujur soal foto yang belum ada.
+                'images' => [
+                    '/images/product/aureus-peacock-front.jpg',
+                    '/images/product/aureus-peacock-back.jpg',
+                ],
             ],
         ];
 
@@ -66,6 +75,13 @@ class HeritageCollectionSeeder extends Seeder
                     'size' => $size,
                     'sku' => "VE-{$data['sku_initials']}-{$size}",
                     'stock' => 10,
+                ]);
+            }
+
+            foreach ($data['images'] ?? [] as $sortOrder => $url) {
+                $product->images()->create([
+                    'url' => $url,
+                    'sort_order' => $sortOrder,
                 ]);
             }
         }
