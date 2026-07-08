@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 import SmoothScrollProvider from "@/components/SmoothScrollProvider";
+import SiteHeader from "@/components/layout/SiteHeader";
+import SiteFooter from "@/components/layout/SiteFooter";
+import { CartProvider } from "@/context/CartContext";
 
 // Body: sans netral (pengganti Calibri yang diminta brief — bukan web font).
 const geistSans = Geist({
@@ -33,7 +36,13 @@ export default function RootLayout({
       className={`${geistSans.variable} ${cormorant.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SmoothScrollProvider>{children}</SmoothScrollProvider>
+        <SmoothScrollProvider>
+          <CartProvider>
+            <SiteHeader />
+            {children}
+            <SiteFooter />
+          </CartProvider>
+        </SmoothScrollProvider>
       </body>
     </html>
   );

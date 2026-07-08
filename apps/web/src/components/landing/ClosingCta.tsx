@@ -63,13 +63,7 @@ export default function ClosingCta() {
         Jelajahi Koleksi
         <span aria-hidden="true">→</span>
       </Link>
-
-      <p
-        data-cta-reveal
-        className="mt-20 text-xs uppercase tracking-[0.3em] text-cream/40"
-      >
-        © 2026 Velcro Ethereal
-      </p>
+      {/* Baris copyright dipindah ke Footer global (Milestone 6) agar tidak dobel. */}
     </section>
   );
 }
