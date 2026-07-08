@@ -10,8 +10,22 @@ gsap.registerPlugin(useGSAP, ScrollTrigger, SplitText);
 
 /**
  * BrandStory — 3 pilar brand (Heritage / Artisan / Eternal).
- * Headline pakai SplitText (stagger per kata) di-trigger saat masuk viewport;
- * tiap pilar reveal berurutan via ScrollTrigger.
+ * Headline pakai SplitText (stagger per kata, masked reveal) di-trigger saat
+ * masuk viewport; tiap pilar reveal berurutan (y + fade + scale-in) via
+ * ScrollTrigger, plus micro-interaction hover (garis gold "digambar").
+ *
+ * ── Catatan diagnosis (Milestone 6, Bagian B) ────────────────────────────────
+ * Laporan "section terasa statis" DIDIAGNOSIS lebih dulu:
+ *  1. Guard reduced-motion di sini SUDAH BENAR (bukan logic terbalik): animasi
+ *     hanya jalan pada "(prefers-reduced-motion: no-preference)". Konsekuensinya,
+ *     kalau OS/browser meng-aktifkan Reduce Motion (macOS: System Settings →
+ *     Accessibility → Display → Reduce Motion), SELURUH animasi section ini
+ *     memang sengaja tidak jalan — ini tersangka utama "statis", bukan bug.
+ *     (Verifikasi Milestone 4 dulu pakai Chrome --force-prefers-reduced-motion,
+ *     jadi screenshot itu memang tidak mewakili animasi yang sebenarnya.)
+ *  2. Start ScrollTrigger ("top 80%") sudah wajar; yang kurang "kelihatan" dulu
+ *     adalah headline yang slide TANPA mask (efeknya samar) dan card yang minim
+ *     depth. Di bawah: masked reveal per kata + card scale-in + hover.
  *
  * NB: copy pilar masih placeholder (asumsi dari brand DNA), pending konfirmasi.
  */
@@ -42,30 +56,38 @@ export default function BrandStory() {
       const mm = gsap.matchMedia();
 
       mm.add("(prefers-reduced-motion: no-preference)", () => {
-        // Headline: SplitText per kata, reveal saat section masuk viewport.
-        const split = new SplitText(heading.current, { type: "words" });
+        // Headline: SplitText per kata dengan MASK per kata (tiap kata slide dari
+        // balik klip-box-nya) — reveal jauh lebih tegas & premium dibanding slide
+        // tanpa mask. Stagger per kata jelas, easing power4.out.
+        const split = new SplitText(heading.current, {
+          type: "words",
+          mask: "words",
+        });
         gsap.from(split.words, {
-          yPercent: 120,
-          opacity: 0,
-          duration: 1,
+          yPercent: 110,
+          duration: 0.9,
           ease: "power4.out",
-          stagger: 0.12,
+          stagger: 0.09,
           scrollTrigger: {
             trigger: heading.current,
-            start: "top 80%",
+            start: "top 85%",
           },
         });
 
-        // Pilar: reveal berurutan.
+        // Pilar: reveal berurutan (stagger antar card) — translate-y + fade +
+        // scale-in halus untuk depth. Start sedikit lebih awal biar tidak
+        // "kelewat" saat scroll cepat.
         gsap.from("[data-pillar]", {
-          y: 60,
+          y: 64,
           opacity: 0,
-          duration: 1,
+          scale: 0.96,
+          transformOrigin: "center bottom",
+          duration: 0.9,
           ease: "power3.out",
-          stagger: 0.18,
+          stagger: 0.16,
           scrollTrigger: {
             trigger: "[data-pillar-grid]",
-            start: "top 78%",
+            start: "top 82%",
           },
         });
 
@@ -79,7 +101,8 @@ export default function BrandStory() {
   return (
     <section
       ref={root}
-      className="relative bg-ink px-6 py-28 sm:py-40"
+      id="filosofi"
+      className="relative scroll-mt-24 bg-ink px-6 py-28 sm:py-40"
       aria-labelledby="brandstory-heading"
     >
       <div className="mx-auto max-w-6xl">
@@ -102,12 +125,18 @@ export default function BrandStory() {
             <article
               key={pillar.title}
               data-pillar
-              className="flex flex-col gap-5 bg-ink p-8 sm:p-10"
+              className="group relative flex flex-col gap-5 bg-ink p-8 transition-colors duration-500 hover:bg-ink-soft sm:p-10"
             >
-              <span className="font-serif text-sm text-gold">
+              {/* Micro-interaction: garis gold tipis "digambar" dari kiri saat
+                  hover — detail kecil khas situs brand premium. */}
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-gold transition-transform duration-500 ease-out group-hover:scale-x-100"
+              />
+              <span className="font-serif text-sm text-gold transition-colors duration-500 group-hover:text-gold/90">
                 {pillar.index}
               </span>
-              <h3 className="font-serif text-3xl font-medium text-cream">
+              <h3 className="font-serif text-3xl font-medium text-cream transition-transform duration-500 ease-out group-hover:translate-x-1">
                 {pillar.title}
               </h3>
               <p className="text-sm leading-relaxed text-cream/70">
