@@ -115,3 +115,102 @@ baris ter-insert: `users` 1, `categories` 3, `products` 4, `product_variants`
 16, sisanya (`product_images`, `addresses`, `carts`, `cart_items`, `orders`,
 `order_items`, `payments`, `shipments`) 0 (belum ada seeder untuk tabel
 transaksional, sesuai cakupan milestone ini).
+
+---
+
+## Milestone 4 — Landing Page dengan GSAP Animation
+**Tanggal:** 8 Juli 2026
+**Status:** Selesai
+
+Ringkasan: Membangun landing page prototipe di `apps/web` (frontend murni,
+TIDAK menyentuh `apps/api`), tampil sebelum halaman `/shop` (Milestone 5).
+Lima section modular di `src/components/landing/` — `Hero`, `BrandStory`,
+`FeaturedProducts`, `Craftsmanship`, `ClosingCta` — dirakit di `src/app/page.tsx`
+(mengganti halaman default create-next-app). Animasi memakai stack yang sudah
+diputuskan: **GSAP core + ScrollTrigger + SplitText + Lenis** (semua gratis penuh
+sejak GSAP diakuisisi Webflow), di-install via `npm i gsap @gsap/react lenis`.
+Smooth scroll (Lenis) dipasang lewat `src/components/SmoothScrollProvider.tsx`
+di root layout, disinkronkan ke ScrollTrigger via `gsap.ticker`.
+
+Keputusan pemilihan aset (dari inspeksi langsung tiap file):
+- **Hero background video → `videos/asset_video03.mp4`.** Satu-satunya kandidat
+  yang landscape (1280×722, ~16:9) SEKALIGUS paling sinematik: interior restoran
+  hangat, bokeh, mood "brand film". Dua video lain portrait (`asset_video02` =
+  detail denim, `asset_video04` = topi/varsity) kurang cocok untuk hero
+  full-bleed desktop; `asset_video01` juga landscape tapi shot grup outdoor yang
+  lebih ramai/terang, kurang "hero".
+- **Poster fallback → `images/brand/hero-poster.jpg`.** Di-extract dari frame
+  bersih `asset_video03` pada t=2s (tanpa subtitle), jadi poster selaras dengan
+  video.
+- **Craftsmanship (mood/tekstur) → `images/brand/asset_06.jpg`** (mood kafe,
+  moody) **+ `images/product/asset_05.jpg`** (close-up tekstur rajut — detail
+  craftsmanship paling jelas), keduanya diberi parallax ringan (scrub).
+- **FeaturedProducts → foto per produk.** Hanya **"Aureus Peacock Jacket"** yang
+  punya foto ASLI (bordir merak emas tampak belakang `brand/asset_02.jpg` +
+  tampak depan `product/asset_01.jpg`, `product/asset_03.jpg`). Tiga produk lain
+  (Aurelia/Verdant Knotwork, Cervus Grove) BELUM ada fotonya — dipakai
+  PLACEHOLDER dari aset lain (a.l. koleksi "Seafarer Wave Knit" yang bukan bagian
+  Heritage) semata untuk mengisi layout. Ditandai eksplisit di
+  `lib/mock-products.ts`. Ganti dengan product photography asli sebelum rilis.
+
+Kendala aset (penting): **semua 4 video sumber punya subtitle auto-caption yang
+ter-burn-in** (mis. "Elegance and Luxury", "Premium Tailoring") dan tiap foto
+punya watermark "Velcro Ethereal" + teks "Velcro Collections on 2026" /
+nama produk. Untuk hero, subtitle disamarkan dengan scrim gradient bawah
+(ink→transparan) + tint + sedikit skala video (`scale-105`); poster sengaja
+diambil dari frame tanpa subtitle. Rekomendasi: minta master video/foto bersih
+(tanpa caption/watermark) dari client untuk versi produksi.
+
+Setting kompresi video (referensi kalau menambah/re-encode video):
+`ffmpeg -i in.mp4 -c:v libx264 -crf 28 -preset slow -vf "scale='min(1280,iw)':-2" -an out.mp4`
+(crf 28, preset slow, downscale ke lebar maks 1280, `-an`/muted). Video hero
+otomatis di-mute juga di markup (`autoPlay muted loop playsInline` — wajib agar
+autoplay tidak diblok browser).
+
+Requirement teknis yang dipenuhi:
+- Semua komponen animasi `"use client"`; animasi GSAP di dalam `useGSAP()`
+  (`@gsap/react`), bukan `useEffect` biasa — cleanup bersih, tidak dobel saat
+  re-render. Integrasi Lenis (infra raf/ticker, bukan tween) tetap di `useEffect`.
+- **Reduced-motion dihormati:** tiap animasi dibungkus
+  `gsap.matchMedia("(prefers-reduced-motion: no-preference)", …)` — kalau user
+  minta motion dikurangi, tween tidak jalan & elemen tetap tampil (state alami),
+  Lenis pun tidak diinisialisasi (pakai scroll native). Ada juga guard CSS
+  `@media (prefers-reduced-motion: reduce)` di `globals.css`.
+- Semua foto pakai `next/image` (bukan `<img>`); video hero `<video>` full-bleed
+  `object-cover` dengan `poster`.
+
+Data mock (`lib/mock-products.ts`): meniru PERSIS shape payload API Laravel
+(snake_case, `base_price` string decimal "850000.00", nested `category`/`variants`
+/`images`). Isi identik `HeritageCollectionSeeder` (4 produk, SKU `VE-…`, ukuran
+S/M/L/XL, stok 10). Semua komponen ambil data dari file ini — tidak ada string
+produk yang di-hardcode di JSX — supaya swap ke API asli (Milestone 5) cukup
+ganti sumber data tanpa bongkar komponen.
+
+Tema visual & font:
+- **Design tokens** ditaruh sebagai `@theme` di `globals.css` (Tailwind v4,
+  project ini tidak punya `tailwind.config`): `ink #1C1712`, `ink-soft #2B241C`,
+  `gold #B8935A`, `gold-dark #8C6D3F`, `green #44543A`, `cream #F3EDE1`.
+- **Font:** brief minta Cambria (heading) + Calibri (body); keduanya font sistem
+  Microsoft, BUKAN web font. Diganti (dicatat di komentar `globals.css`/`layout`):
+  heading → **Cormorant Garamond** (serif heritage/ethereal, via
+  `next/font/google`), body → **Geist Sans** (sans netral, sudah ada sejak
+  scaffold). Cambria/Calibri tetap jadi fallback stack.
+
+CATATAN ASUMSI (belum final, pending client):
+- **Palet warna & seluruh copy landing masih ASUMSI** (diturunkan dari brand DNA,
+  bukan brand guideline resmi) — ditandai eksplisit di `globals.css`. Wajib
+  dikonfirmasi ulang saat guideline final.
+- **Data produk = mock sementara**, menunggu API asli di Milestone 5. `base_price`
+  Rp 850.000 tetap placeholder (identik seeder).
+
+Batasan milestone (sesuai brief, tidak dikerjakan): halaman `/shop` asli belum
+dibuat (link CTA mengarah ke `/shop` & `/shop/{slug}`, boleh 404 dulu); tidak
+menyentuh `apps/api`; tidak ada shader/WebGL; tidak menambah Framer Motion
+(ScrollTrigger sudah cukup); `.env` tidak di-commit; belum push ke GitHub.
+
+Verifikasi: `npx tsc --noEmit` & `npm run lint` bersih; `npm run build`
+(Turbopack) sukses — 4 halaman ter-prerender static (`/`, `/_not-found`),
+Cormorant Garamond ter-fetch & self-host oleh `next/font` tanpa error. Dev server
+di-render & di-screenshot (desktop 1440px + mobile 390px, via Chrome headless
+dengan `prefers-reduced-motion` dipaksa): semua section tampil, gambar termuat,
+layout responsif tanpa overflow horizontal, tidak ada error runtime di log.
