@@ -94,10 +94,7 @@ export default async function ProductDetailPage(
             </p>
 
             <div className="mt-10 border-t border-cream/10 pt-10">
-              <ProductPurchasePanel
-                basePrice={product.base_price}
-                variants={product.variants}
-              />
+              <ProductPurchasePanel product={product} />
             </div>
           </div>
         </div>
