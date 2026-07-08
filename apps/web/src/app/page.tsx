@@ -3,18 +3,22 @@ import BrandStory from "@/components/landing/BrandStory";
 import FeaturedProducts from "@/components/landing/FeaturedProducts";
 import Craftsmanship from "@/components/landing/Craftsmanship";
 import ClosingCta from "@/components/landing/ClosingCta";
+import { getProducts } from "@/lib/api";
 
 /**
- * Landing page Velcro Ethereal (Milestone 4).
- * Prototipe visual frontend murni — tampil sebelum halaman /shop (Milestone 5).
- * Data produk dari lib/mock-products.ts (mock, menunggu API asli).
+ * Landing page Velcro Ethereal.
+ * Server Component: fetch produk asli dari API Laravel (lib/api.ts, Milestone 5)
+ * dan oper ke FeaturedProducts sebagai props — tidak ada lagi mock data runtime,
+ * dan client component tidak fetch sendiri via useEffect.
  */
-export default function Home() {
+export default async function Home() {
+  const products = await getProducts();
+
   return (
     <main className="flex-1">
       <Hero />
       <BrandStory />
-      <FeaturedProducts />
+      <FeaturedProducts products={products} />
       <Craftsmanship />
       <ClosingCta />
     </main>

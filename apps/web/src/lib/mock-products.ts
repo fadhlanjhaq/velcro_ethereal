@@ -122,11 +122,12 @@ export const mockProducts: MockProduct[] = [
     story: "Aureus (emas) — terinspirasi keindahan burung merak",
     base_price: PLACEHOLDER_BASE_PRICE,
     category: JAKET,
-    // FOTO ASLI — bordir merak emas (back) + tampak depan.
+    // FOTO ASLI — tampak depan + bordir merak emas (back). Path mengikuti hasil
+    // rename semantik Milestone 5 (lihat docs/MILESTONES.md); di DB (seeder)
+    // produk ini punya 2 baris product_images: front (sort_order 0) & back (1).
     images: buildImages([
-      "/images/brand/asset_02.jpg",
-      "/images/product/asset_01.jpg",
-      "/images/product/asset_03.jpg",
+      "/images/product/aureus-peacock-front.jpg",
+      "/images/product/aureus-peacock-back.jpg",
     ]),
     variants: buildVariants("APJ"),
   },

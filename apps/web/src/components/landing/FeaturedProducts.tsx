@@ -6,18 +6,23 @@ import Link from "next/link";
 import { gsap } from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { mockProducts, formatRupiah } from "@/lib/mock-products";
+import { formatRupiah, type Product } from "@/lib/api";
+import PhotoFallback from "@/components/shop/PhotoFallback";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 /**
  * FeaturedProducts — preview 4 produk Heritage Collection.
- * Data diambil dari lib/mock-products.ts (BUKAN hardcode di JSX) supaya swap ke
- * API asli di Milestone 5 tidak perlu bongkar komponen. Kartu reveal berurutan
- * via ScrollTrigger. CTA "Lihat Koleksi Lengkap" mengarah ke /shop (boleh 404
- * dulu — halaman itu cakupan Milestone 5).
+ * Data produk asli di-fetch di Server Component induk (app/page.tsx) lewat
+ * lib/api.ts dan dioper sebagai props — komponen ini tetap "use client" khusus
+ * untuk animasi GSAP, TIDAK fetch sendiri via useEffect. Kartu reveal berurutan
+ * via ScrollTrigger. CTA "Lihat Koleksi Lengkap" mengarah ke /shop.
  */
-export default function FeaturedProducts() {
+export default function FeaturedProducts({
+  products,
+}: {
+  products: Product[];
+}) {
   const root = useRef<HTMLElement>(null);
 
   useGSAP(
@@ -74,7 +79,7 @@ export default function FeaturedProducts() {
           data-product-grid
           className="mt-16 grid grid-cols-1 gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-4"
         >
-          {mockProducts.map((product) => (
+          {products.map((product) => (
             <Link
               key={product.id}
               href={`/shop/${product.slug}`}
@@ -82,13 +87,17 @@ export default function FeaturedProducts() {
               className="group flex flex-col"
             >
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-sm bg-ink-soft">
-                <Image
-                  src={product.images[0].url}
-                  alt={product.name}
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-                />
+                {product.images.length > 0 ? (
+                  <Image
+                    src={product.images[0].url}
+                    alt={product.name}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                  />
+                ) : (
+                  <PhotoFallback />
+                )}
               </div>
               <h3 className="mt-5 font-serif text-xl font-medium">
                 {product.name}
