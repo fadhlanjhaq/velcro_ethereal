@@ -61,3 +61,57 @@ Isu & fix:
   `laravel/pail` ke `extra.laravel.dont-discover` (mencegah auto-discovery paket
   dev-only saat `composer install --no-dev`); namun tidak ada catatan yang
   mengonfirmasi ini sebagai fix untuk 500 tersebut, jadi ini **belum terverifikasi**.
+
+---
+
+## Milestone 3 — Database Schema, Migration & Seeder
+**Tanggal:** 8 Juli 2026
+**Status:** Selesai
+
+Ringkasan: Membuat skema database inti e-commerce di `apps/api` — 12 migration
+(`categories`, `products`, `product_variants`, `product_images`, `addresses`,
+`carts`, `cart_items`, `orders`, `order_items`, `payments`, `shipments`, plus
+kolom `phone` pada `users` via migration terpisah), model Eloquent dengan
+relasi lengkap (`hasMany`/`belongsTo`/`hasOne`), dan seeder awal
+(`CategorySeeder`, `HeritageCollectionSeeder`). Model mengikuti konvensi
+codebase yang sudah ada (atribut PHP `#[Fillable]`/`#[Hidden]`, method
+`casts()`), dan status enum (`orders.status`, `payments.status`,
+`shipments.status`) di-cast ke native PHP backed enum (`App\Enums\*`).
+
+Penyesuaian dari SOT:
+- **Varian produk hanya per ukuran (S/M/L/XL), bukan ukuran × warna.**
+  SOT awal mengasumsikan kombinasi size × warna per varian, tapi untuk
+  koleksi ini setiap nama produk sudah punya satu colorway tetap yang
+  melekat pada identitas produk (mis. "Aurelia Knotwork Jacket" =
+  colorway Beige Brown yang tidak berubah), bukan pilihan warna terpisah
+  di level varian. `product_variants` karena itu hanya punya kolom `size`,
+  tanpa kolom warna.
+- Dev harian pindah dari SQLite ke **MySQL native via DBngin**
+  (`DB_HOST=127.0.0.1`, `DB_PORT=3311`, database `db_velcro01`) — `.env`
+  sudah disesuaikan sebelum migration dijalankan (tidak di-commit).
+
+Keputusan kunci:
+- **`orders.shipping_address` disimpan sebagai snapshot JSON**, bukan relasi ke
+  `addresses`, supaya histori order tidak berubah kalau user mengedit/menghapus
+  alamatnya setelah checkout.
+- **`order_items` menyimpan snapshot (`product_name`, `size`, `price`)** dan
+  `product_variant_id` dibuat nullable dengan `nullOnDelete`, supaya order lama
+  tidak rusak kalau varian produk dihapus di kemudian hari.
+- Migration untuk roles/permissions **sengaja belum dibuat** — itu fitur upsell
+  tier (multi-role admin), belum diperlukan di base tier.
+
+Data seed:
+- 3 kategori: Baju, Jaket, Celana.
+- 4 produk koleksi "Heritage" (Aurelia Knotwork Jacket, Verdant Knotwork
+  Jacket, Cervus Grove Jacket, Aureus Peacock Jacket), semua kategori Jaket,
+  masing-masing 4 varian ukuran (S/M/L/XL), stok awal 10/varian, SKU format
+  `VE-[inisial]-[ukuran]`.
+- **`base_price` = Rp 850.000 untuk semua produk adalah PLACEHOLDER** (ditandai
+  eksplisit di `HeritageCollectionSeeder`) — harga asli menyusul dari client,
+  belum final.
+
+Verifikasi: `php artisan migrate:fresh --seed` berhasil tanpa error. Jumlah
+baris ter-insert: `users` 1, `categories` 3, `products` 4, `product_variants`
+16, sisanya (`product_images`, `addresses`, `carts`, `cart_items`, `orders`,
+`order_items`, `payments`, `shipments`) 0 (belum ada seeder untuk tabel
+transaksional, sesuai cakupan milestone ini).
