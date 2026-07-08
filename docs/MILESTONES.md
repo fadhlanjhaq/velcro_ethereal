@@ -318,3 +318,92 @@ Dev server: `/shop` & `/shop/aureus-peacock-jacket` di-screenshot (1440px) — d
 dari DB (bukan mock; dibuktikan 3 produk menampilkan fallback "Foto segera hadir"
 yang hanya mungkin dari `images: []` DB), galeri front+back Aureus tampil, tombol
 keranjang disabled; landing page tetap tampil benar dengan data API.
+
+---
+
+## Milestone 6 — Footer, Polish Animasi, Simulasi Alur Checkout
+**Tanggal:** 8 Juli 2026
+**Status:** Selesai
+
+Tiga pekerjaan independen untuk membuat prototipe terasa hidup saat demo ke client.
+
+> ⚠️ **PENTING — Bagian C (alur checkout) adalah SIMULASI MURNI FRONTEND.**
+> Cart, checkout, pilihan pembayaran (ala Midtrans Snap), QRIS, sampai halaman
+> sukses **TIDAK terhubung ke backend / Midtrans / API order apa pun**. Ini
+> PENGECUALIAN SENGAJA dari prinsip "jangan bikin tombol yang terlihat berfungsi
+> padahal belum ada backend" (berlaku sejak Milestone 5) — khusus untuk kebutuhan
+> demo/pitching. **Jangan salah kira ini production-ready.** Tidak ada order yang
+> tersimpan ke database, tidak ada pembayaran nyata yang diproses. Ditandai
+> eksplisit di komentar header setiap file terkait (`context/CartContext.tsx`,
+> `lib/order.ts`, `ProductPurchasePanel.tsx`, dan semua `app/cart` + `app/checkout/*`).
+
+Bagian A — Footer global (`components/layout/SiteFooter.tsx`, dipasang di root
+`layout.tsx` → muncul di semua halaman):
+- 4 kolom: (1) wordmark + tagline brand ("Pakaian bordir tangan — warisan yang
+  dijahit untuk melampaui musim.", selaras suara Hero/BrandStory, bukan duplikat
+  headline "tiga prinsip") + link Instagram (`https://www.instagram.com/velcroethereal`,
+  `target="_blank" rel="noopener noreferrer"`); (2) KOLEKSI → Heritage Collection
+  (`/shop`); (3) TENTANG → Filosofi Brand (`/#filosofi`) & Craftsmanship
+  (`/#craftsmanship`), memakai anchor `id` yang ditambahkan ke section landing;
+  (4) KABAR RILIS TERBATAS → input email + tombol Kirim. **Form newsletter
+  PLACEHOLDER** — submit tidak ke ESP/backend mana pun, hanya menampilkan
+  konfirmasi inline "Terima kasih!" (ditandai di komentar, menunggu integrasi
+  email service). Baris copyright: "© 2026 Velcro Ethereal. Limited Production —
+  Setiap piece bernomor." Copyright kembar di `ClosingCta` dihapus agar tak dobel.
+  Semua warna dari design tokens Milestone 4 (tanpa warna baru).
+
+Bagian B — Polish animasi BrandStory (`components/landing/BrandStory.tsx`).
+**Diagnosis dulu** sesuai instruksi:
+- Guard reduced-motion di komponen **SUDAH BENAR (bukan logic terbalik)**: animasi
+  hanya jalan pada `(prefers-reduced-motion: no-preference)`. Konsekuensinya, kalau
+  OS/browser meng-aktifkan Reduce Motion (mis. macOS Accessibility → Display),
+  SELURUH animasi section ini memang sengaja mati — **tersangka utama "terasa
+  statis", bukan bug**. (Catatan: verifikasi Milestone 4 dulu pakai Chrome
+  `--force-prefers-reduced-motion`, jadi screenshot itu memang menampilkan versi
+  tanpa animasi.) ScrollTrigger `start "top 80%"` juga sudah wajar; yang kurang
+  "kelihatan" adalah headline yang slide TANPA mask (efek samar) & card minim depth.
+- Peningkatan: headline SplitText per kata kini pakai **mask per kata** (slide dari
+  balik klip-box, jauh lebih tegas) + stagger jelas (power4.out); card 01/02/03
+  reveal berurutan dengan translate-y + fade + **scale-in**; micro-interaction hover
+  (garis gold tipis "digambar" dari kiri + tint bg + geser judul). Diverifikasi
+  render di Chrome (headless, tanpa force reduced-motion): heading & 3 pilar tampil
+  penuh setelah masuk viewport.
+
+Bagian C — Simulasi alur checkout (100% frontend, TANPA endpoint API baru):
+- **Cart state**: `context/CartContext.tsx` — React Context in-memory, identitas
+  item per `sku` (produk+ukuran), aksi add/updateQty/remove/clear, derivasi
+  `count`/`subtotal`. **Keterbatasan disengaja & didokumentasikan: isi cart hilang
+  saat refresh** (state hanya di memori; persistensi sengaja tidak dibuat).
+- **Header global** (`components/layout/SiteHeader.tsx`, fixed): wordmark → landing
+  + ikon keranjang dengan badge jumlah item dari context. Belum ada header
+  sebelumnya (landing Milestone 4 tanpa nav), jadi dibuat baru.
+- `/shop/[slug]`: tombol "Tambah ke Keranjang" **diaktifkan** (sebelumnya disabled
+  di Milestone 5) — wajib pilih ukuran dulu (tombol disabled + hint "Pilih ukuran
+  terlebih dahulu" sampai dipilih), lalu masuk cart + feedback inline "✓
+  Ditambahkan ke keranjang" + link "Lihat keranjang".
+- `/cart`: daftar item (foto/fallback, nama, ukuran, harga), qty ±, hapus,
+  subtotal, tombol Checkout. `/checkout`: form penerima (nama/telepon/alamat plain
+  text, TANPA validasi ongkir — Biteship belum ada) + ringkasan pesanan → "Lanjut
+  ke Pembayaran". `/checkout/payment`: pilihan metode ala Midtrans Snap (Virtual
+  Account / E-Wallet / QRIS / Kartu Kredit) sebagai radio-card; QRIS → QR code
+  (`qrcode.react`, meng-encode string dummy "SIMULATED-ORDER-DO-NOT-SCAN") +
+  countdown 15:00 + "Saya Sudah Bayar". `/checkout/success`: "Pesanan Berhasil!" +
+  nomor order dummy (timestamp+random, dibawa via query `?order=` dari halaman
+  bayar — deterministik antar SSR/hydrate, hindari setState-in-effect) + **reset
+  cart** saat termuat.
+- Dependency baru: `qrcode.react@4.2.0` (untuk QR simulasi QRIS).
+
+Batasan (sesuai brief, tidak dikerjakan): **tidak ada endpoint API baru di
+`apps/api`** (Bagian C murni frontend); tidak ada integrasi Midtrans SDK asli;
+tidak ada persistensi cart/order ke DB; `.env` tidak di-commit; belum push ke
+GitHub (langkah manual terakhir).
+
+Verifikasi: `npx tsc --noEmit`, `npm run lint`, `npm run build` (Turbopack, 9
+route, checkout pages = static/client-rendered) bersih. **Walkthrough alur penuh
+via Chrome DevTools Protocol** (navigasi client-side agar cart in-memory tetap
+terjaga): add-to-cart disabled sebelum pilih ukuran → pilih M → badge 1 → /cart
+tampil item + "Ukuran M" + qty +1 (badge 2, subtotal Rp 1.700.000) → /checkout isi
+form → /checkout/payment pilih QRIS → QR + countdown "15:00" tampil → "Saya Sudah
+Bayar" → /checkout/success nomor order `VE-…` tergenerate & **cart ter-reset (badge
+hilang)**. Footer & BrandStory (heading masked reveal + 3 pilar) tampil benar;
+newsletter footer menampilkan "Terima kasih!" setelah submit. Semua di-screenshot.
