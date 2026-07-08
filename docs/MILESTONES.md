@@ -214,3 +214,107 @@ Cormorant Garamond ter-fetch & self-host oleh `next/font` tanpa error. Dev serve
 di-render & di-screenshot (desktop 1440px + mobile 390px, via Chrome headless
 dengan `prefers-reduced-motion` dipaksa): semua section tampil, gambar termuat,
 layout responsif tanpa overflow horizontal, tidak ada error runtime di log.
+
+---
+
+## Milestone 5 — API Laravel + Halaman Shop
+**Tanggal:** 8 Juli 2026
+**Status:** Selesai
+
+Ringkasan: Menyambungkan data asli (Milestone 3) ke frontend (Milestone 4) —
+mengganti mock data dengan API Laravel — dan membangun halaman `/shop` +
+`/shop/{slug}`. `apps/web/src/lib/mock-products.ts` dipakai sebagai KONTRAK
+bentuk payload; API Resource dibuat agar JSON-nya PERSIS sama (snake_case,
+`base_price` string decimal, nested `category`/`variants`/`images`).
+
+Bagian A — API Laravel (`apps/api`):
+- `routes/api.php` didaftarkan lewat `bootstrap/app.php` (`withRouting(api: …)` —
+  Laravel 13 belum menyertakan param `api:` secara default). Dua endpoint:
+  `GET /api/products` (produk aktif) & `GET /api/products/{slug}` (404 JSON kalau
+  slug tidak ada / produk non-aktif, via `firstOrFail`).
+- `ProductController` eager-load `category`/`variants`/`images` (hindari N+1).
+- API Resource: `ProductResource`, `CategoryResource`, `ProductImageResource`,
+  `ProductVariantResource` — hanya mengekspos field yang ada di kontrak mock
+  (mis. Category cuma `id`/`name`/`slug`; variant cuma `size`/`sku`/`stock`).
+  Response tetap pakai envelope default Laravel `{ "data": … }`; frontend yang
+  meng-unwrap. Tidak ada perbedaan struktur signifikan Eloquent vs mock (Milestone
+  4 sudah men-desain mock meniru Eloquent), jadi tak ada penyimpangan yang perlu
+  dikompromikan.
+- `config/cors.php` dibuat eksplisit: `paths` `api/*`, origin dibatasi ke dev
+  Next.js (`localhost:3000` / `127.0.0.1:3000`), method `GET`/`OPTIONS`, TANPA
+  wildcard `*` dan tanpa credentials (default Laravel terlalu longgar). CORS ini
+  fallback — request utama lewat proxy (same-origin), lihat Bagian B.
+
+Bagian B — Koneksi Next.js:
+- **Domain Herd apps/api:** belum ada saat mulai (parked dir `~/Herd` cuma
+  meng-serve satu level; root Laravel ada di `velcro/velcro-ethereal/apps/api`
+  yang lebih dalam). Dibuat via `herd link velcro-api` → **`http://velcro-api.test`**
+  (PHP 8.4). `herd link` ikut menulis `APP_URL` di `.env` (tidak di-commit).
+- `next.config.ts`: `rewrites()` proxy `/api/:path*` → `velcro-api.test/api/:path*`
+  (env `LARAVEL_API_URL`, fallback ke domain Herd). Tujuan: browser lihat
+  same-origin, paritas dengan nginx reverse proxy production (Milestone 2).
+- `lib/api.ts`: `getProducts()` / `getProductBySlug()` + `formatRupiah`. Tipe
+  di-reuse dari `mock-products.ts` via `import type` (dihapus saat compile → mock
+  tidak ikut runtime). Resolusi URL: Server Component fetch Laravel langsung
+  (URL relatif tak bisa di-resolve di server); browser pakai `/api/...` same-origin
+  (di-proxy rewrites). `cache: "no-store"` supaya data selalu mengikuti DB.
+
+Bagian C — Reorganisasi aset (⚠️ KOREKSI PREMIS TASK): Task mengasumsikan foto
+**depan & belakang** Aureus Peacock ada di **dua file di `public/images/product/`**.
+Inspeksi visual menunjukkan itu tidak akurat:
+- `product/asset_01.jpg` = tampak **depan** (orang menghadap kamera).
+- `product/asset_03.jpg` = tampak **depan** juga (varian pose lain) — BUKAN belakang.
+- `brand/asset_02.jpg` = tampak **belakang** dengan bordir merak emas (foto ikonik).
+
+Jadi front+back TIDAK dua-duanya di `product/`; foto belakang justru di `brand/`.
+Mengikuti niat sebenarnya (pasangan depan + belakang) alih-alih premis yang keliru:
+- `product/asset_01.jpg` → `product/aureus-peacock-front.jpg`
+- `brand/asset_02.jpg`   → `product/aureus-peacock-back.jpg` (dipindah ke `product/`)
+- `product/asset_03.jpg` DIBIARKAN apa adanya (foto depan ekstra; per aturan
+  "jangan rename spekulatif", dan Bagian D hanya butuh 2 foto).
+Referensi lama hanya ada di `mock-products.ts` (di-update ke 2 path baru). Semua
+via `git mv` (histori terjaga).
+
+Bagian D — Seed gambar: `HeritageCollectionSeeder` mengisi `product_images` hanya
+untuk Aureus Peacock — 2 baris: front (`sort_order` 0) + back (1). 3 produk lain
+(Aurelia, Verdant, Cervus) sengaja `product_images` KOSONG — tidak diisi
+placeholder agar API jujur soal foto yang belum ada. `migrate:fresh --seed`:
+`product_images` = 2 baris (semuanya milik Aureus), sisa tabel sesuai Milestone 3.
+
+Bagian E — Halaman Shop:
+- `/shop` (Server Component): grid 4 produk dari `getProducts()`, design tokens
+  Milestone 4. Produk tanpa foto → komponen `PhotoFallback` (panel bertekstur
+  garis emas + label "Foto segera hadir"), bukan broken image.
+- `/shop/[slug]` (Server Component): `getProductBySlug()`, `notFound()` kalau null.
+  Galeri (front+back atau fallback), story, deskripsi, harga, pilihan ukuran dari
+  `variants` (stok 0 → di-disable). `params` adalah Promise (Next 16) — di-`await`;
+  tipe pakai helper global `PageProps<'/shop/[slug]'>`. Interaksi (pilih ukuran +
+  tombol keranjang) diisolasi di client island `ProductPurchasePanel`. Tombol
+  "Tambah ke Keranjang" **disabled** berlabel jujur "Segera Hadir" (+ catatan
+  "Keranjang & checkout belum tersedia") — cart/checkout milestone terpisah.
+- `FeaturedProducts.tsx` (landing) tidak lagi `import mock-products`; menerima
+  `products` sebagai props dari `app/page.tsx` (kini Server Component `async` yang
+  fetch `getProducts()`). Komponen tetap `"use client"` untuk GSAP, TIDAK fetch
+  via `useEffect`. Card juga pakai `PhotoFallback` untuk produk tanpa foto.
+
+Status foto produk: **1 dari 4** produk punya foto asli (Aureus Peacock). 3 lainnya
+menunggu product photography asli — ditampilkan dengan fallback jujur, bukan
+placeholder yang menyamar sebagai foto.
+
+`mock-products.ts` **DIPERTAHANKAN** sebagai referensi bentuk tipe data (interface
+`Mock*` masih jadi single source of truth tipe yang di-reuse `lib/api.ts` via
+`import type`), meski **tidak lagi dipakai sebagai sumber data runtime**.
+
+Batasan (sesuai brief, tidak dikerjakan): tidak ada cart/checkout/payment; tidak
+ada halaman kategori/filter/search; `mock-products.ts` tidak dihapus; `.env` tidak
+di-commit; belum push ke GitHub (langkah manual terakhir).
+
+Verifikasi: `php artisan migrate:fresh --seed` OK (`product_images` 2 baris untuk
+Aureus, kosong untuk 3 lainnya). API dicek via `curl`: `/api/products` 200 &
+shape sesuai kontrak, `/api/products/{slug}` 200, slug tak dikenal 404, `images`
+`[]` untuk produk tanpa foto. `npx tsc --noEmit`, `npm run lint`, dan `npm run
+build` (Turbopack, `/`, `/shop`, `/shop/[slug]` = dynamic server-rendered) bersih.
+Dev server: `/shop` & `/shop/aureus-peacock-jacket` di-screenshot (1440px) — data
+dari DB (bukan mock; dibuktikan 3 produk menampilkan fallback "Foto segera hadir"
+yang hanya mungkin dari `images: []` DB), galeri front+back Aureus tampil, tombol
+keranjang disabled; landing page tetap tampil benar dengan data API.
