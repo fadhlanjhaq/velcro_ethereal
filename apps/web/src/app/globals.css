@@ -1,26 +1,73 @@
 @import "tailwindcss";
 
+/*
+  ── Velcro Ethereal — design tokens ──────────────────────────────────────────
+  ASUMSI AWAL, BUKAN brand guideline resmi dari client.
+
+  Palet diturunkan dari brand DNA (heritage / artisan / ethereal, aksen emas
+  bordir) dan dari mood aset foto/video yang ada. Warna & copy pada landing ini
+  masih placeholder dan HARUS dikonfirmasi ulang saat brand guideline final
+  tersedia. Data produk juga masih mock (lihat lib/mock-products.ts), menunggu
+  API asli di Milestone 5.
+
+  Font: brief meminta Cambria (heading) + Calibri (body). Keduanya font sistem
+  Microsoft, TIDAK tersedia andal sebagai web font (bukan Google Fonts). Sesuai
+  arahan brief, diganti:
+    - Heading  → Cormorant Garamond (serif heritage, high-contrast, "ethereal")
+    - Body     → Geist Sans (sans netral, sudah ada di project sejak scaffold)
+  Cambria/Calibri tetap dicantumkan sebagai fallback stack kalau kebetulan ada
+  di device user. Substitusi ini juga dicatat di docs/MILESTONES.md.
+*/
+
+@theme {
+  --color-ink: #1c1712; /* espresso-black — background utama */
+  --color-ink-soft: #2b241c; /* card di atas dark bg */
+  --color-gold: #b8935a; /* aksen heritage/artisan */
+  --color-gold-dark: #8c6d3f; /* teks gold di atas background terang */
+  --color-green: #44543a; /* aksen sekunder */
+  --color-cream: #f3ede1; /* background terang / teks di atas dark */
+
+  --font-serif: var(--font-cormorant), Cambria, Georgia, "Times New Roman",
+    serif;
+  --font-sans: var(--font-geist-sans), Calibri, system-ui, -apple-system,
+    sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  /* Fallback smooth scroll kalau JS/Lenis tidak jalan; Lenis mengambil alih
+     saat aktif. Dinonaktifkan otomatis lewat media query di bawah. */
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ink);
+  color: var(--color-cream);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-gold);
+  color: var(--color-ink);
+}
+
+/* Hormati preferensi reduced-motion secara global (pelengkap guard JS di tiap
+   komponen animasi). */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
