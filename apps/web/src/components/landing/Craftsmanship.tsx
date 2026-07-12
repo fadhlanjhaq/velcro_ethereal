@@ -58,7 +58,8 @@ export default function Craftsmanship() {
   return (
     <section
       ref={root}
-      className="overflow-hidden bg-ink px-6 py-28 sm:py-40"
+      id="craftsmanship"
+      className="overflow-hidden scroll-mt-24 bg-ink px-6 py-28 sm:py-40"
       aria-labelledby="craft-heading"
     >
       <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-2 lg:gap-20">
