@@ -407,3 +407,102 @@ form → /checkout/payment pilih QRIS → QR + countdown "15:00" tampil → "Say
 Bayar" → /checkout/success nomor order `VE-…` tergenerate & **cart ter-reset (badge
 hilang)**. Footer & BrandStory (heading masked reveal + 3 pilar) tampil benar;
 newsletter footer menampilkan "Terima kasih!" setelah submit. Semua di-screenshot.
+
+## Milestone 7 — Halaman /info (Link-in-Bio)
+**Tanggal:** 12 Juli 2026
+**Status:** Selesai
+
+Halaman standalone yang diakses lewat tap link di bio Instagram — hub link
+sementara sambil situs utama masih dalam proses. **BUKAN bagian dari pengalaman
+situs utama**: sengaja tidak mewarisi header/footer/cart badge. Prioritas: ringan,
+cepat dimuat, mobile-first (halaman ini hampir pasti dibuka dari HP).
+
+Langkah 1 — Restructure layout. Root `app/layout.tsx` dulu me-render
+SmoothScrollProvider + CartProvider + SiteHeader + SiteFooter untuk SEMUA halaman.
+Dipisah supaya `/info` bisa berdiri sendiri:
+- `app/layout.tsx` sekarang **minimal** — hanya `<html>`/`<body>`, font (Geist +
+  Cormorant), dan `globals.css` (token). Metadata dasar tetap di sini.
+- Chrome situs utama dipindah ke **route group** `app/(main)/layout.tsx`
+  (SmoothScroll + Cart + Header + Footer). Layout ini pakai fragment (bukan
+  wrapper `div`) agar Header/children/Footer tetap anak langsung
+  `<body class="flex flex-col">` — footer tetap terdorong ke bawah lewat
+  `main.flex-1` persis seperti sebelum restructure.
+- Halaman existing dipindah ke dalam group: `(main)/page.tsx`, `(main)/shop`,
+  `(main)/cart`, `(main)/checkout`. Route group `(…)` tidak mengubah URL, jadi
+  `/`, `/shop`, `/cart`, `/checkout` **tetap sama** dan tetap tampil header/footer
+  (diverifikasi, tanpa regresi).
+- `/info` berada DI LUAR `(main)` → hanya mewarisi root layout minimal.
+
+Langkah 2 — `app/info/page.tsx` (Server Component, tanpa GSAP/Lenis).
+- `const LINKS` di paling atas file (mudah diedit): whatsapp, shopee, tiktok.
+- Header: `next/image` `public/images/brand/asset_06.jpg` — foto **vertikal
+  1080×1440**, dipilih beda dari homepage (yang pakai video/hero-poster landscape)
+  supaya kedua touchpoint punya nuansa berbeda. Overlay gradient → ink untuk
+  keterbacaan, logo teks "VELCRO ETHEREAL" (serif Cormorant) + tagline "Luxury
+  Heritage Streetwear" (uppercase, tracking, gold).
+- 4 tombol pill (urutan: Website Utama, WhatsApp, Shopee, TikTok). Ikon brand dari
+  `react-icons/si` (`SiWhatsapp`, `SiShopee`, `SiTiktok` — Simple Icons punya
+  ketiganya; **dependency baru `react-icons@5`**, import per-ikon jadi tree-shake
+  bersih). 3 tombol aktif = `<a target="_blank" rel="noopener noreferrer">` dengan
+  fill solid `bg-ink-soft` + border gold + hover isi gold. Tombol "Website Utama"
+  dibedakan: **border-only tanpa fill + opacity rendah + badge "Segera Hadir"**,
+  dan **non-clickable** — `<button disabled>`, bukan `<a>`.
+- Footer minimal: copyright singkat saja (TANPA newsletter/kolom nav SiteFooter).
+
+Langkah 3 — Teknis. Reuse token warna & font existing (ink, ink-soft, gold, cream
+— tanpa token baru). Animasi ringan: satu keyframe `ve-fade-in-up` di `globals.css`
+(CSS murni, fill-mode both, delay staggered inline per elemen; reduced-motion
+otomatis dinetralkan guard global). `main` diberi `overflow-x-hidden` sebagai
+jaring pengaman; layout `max-w-md` mobile-first, tanpa horizontal overflow di 375px.
+
+**Placeholder — menunggu data asli dari client:** ketiga link (WhatsApp/Shopee/
+TikTok) masih placeholder. WhatsApp & Shopee dari brief; **TikTok belum diberikan**
+(dipakai `@velcroethereal` sementara). Tombol "Website Utama" sengaja non-aktif
+karena **situs utama masih prototipe/simulasi** — checkout belum menerima transaksi
+sungguhan (lihat Milestone 6), jadi belum layak diarahkan ke customer.
+
+Batasan (sesuai brief): `apps/api` **tidak disentuh**; halaman existing tidak
+diubah selain restructure layout Langkah 1; `.env` tidak di-commit; belum push ke
+GitHub (langkah manual terakhir).
+
+Verifikasi: `npx next build` bersih (10 route, `/info` prerendered static; `/`,
+`/shop`, `/shop/[slug]` tetap dynamic/SSR seperti sebelumnya). Dev server: `/info`
+me-render logo + tagline + 3 link (`wa.me/628131453336`, `id.shp.ee/PF2SRdhu`,
+`tiktok.com/@velcroethereal`) + badge "Segera Hadir"; "Website Utama" ter-render
+sebagai `<button disabled>` (bukan `<a>`); TANPA newsletter/SiteFooter. Home `/`
+tetap membawa SiteHeader (7 link `/shop`) + SiteFooter (Instagram). Screenshot
+Chrome headless mengonfirmasi komposisi header + 4 tombol + footer rapi & center.
+
+### Milestone 7b — Backdrop watermark logo /info
+Di viewport lebar, kartu konten yang ter-center (`max-w-md`) menyisakan area kosong
+flat kiri-kanan. Diisi tekstur latar supaya konsisten dengan DNA visual brand.
+
+**Tiga iterasi ditinggalkan** karena secara visual meleset: (1) SVG lattice diamond
+"geometri sakral"; (2) SVG gelombang sinus interpretasi "garis bergelombang";
+(3) crop foto bordir "Seafarer Wafe Knit" (`asset_05.jpg`) → luminance mask di atas
+layer gold. Semua sisa dihapus: `public/pattern-heritage.svg`,
+`public/images/embroidery-texture-source.jpg`, `embroidery-texture-mask.jpg`, dan
+CSS `mask-image` terkait.
+
+Iterasi final — **watermark logo asli**, BUKAN pattern/foto buatan:
+- Sumber: `public/images/logo/velcro-logo.png` (wordmark "VELCRO ETHEREAL" putih/
+  transparan, cocok untuk background gelap).
+- Teknik (**hanya di `/info`**): parent `<div aria-hidden>` `fixed inset-0
+  overflow-hidden pointer-events-none` (mengurung rotasi → tak ada scroll). Di
+  dalamnya child **oversized** `absolute` `w/h-[200%]` di-center (`left/top-1/2` +
+  `-translate-1/2`) dengan `background-image` logo, `background-repeat: repeat`,
+  `background-size: 300px` (grid rapat, per-instance kecil — ramai tapi bukan satu
+  logo raksasa), lalu `rotate(-22deg)`. Oversize 200% + `overflow-hidden` parent →
+  rotasi tak menyisakan celah di sudut & tak memunculkan scrollbar. Layer DI ATAS
+  warna dasar ink, DI BAWAH konten (`z-10`).
+- **Review dua tahap opacity** (sesuai arahan): Tahap 1 `opacity 0.32` untuk menilai
+  komposisi (ukuran per-instance, jarak, sudut) → dikonfirmasi oke. Tahap 2
+  diturunkan ke `opacity 0.07` sebagai tekstur latar halus. Komposisi (size 300px,
+  −22°, oversize 200%) identik di kedua tahap; hanya opacity beda.
+- Fokus tetap di konten: opacity rendah + `pointer-events-none`.
+- Verifikasi: screenshot Chrome headless **4 kombinasi** (Tahap 1 & Tahap 2 ×
+  desktop 1440px & mobile 375px) — watermark diagonal mengisi area kosong,
+  terasa sebagai tekstur latar (bukan elemen yang bersaing), foto header & tombol
+  tetap fokus utama; tanpa horizontal/vertical scroll dari rotasi. `tsc` + `eslint`
+  bersih; `/info` tetap prerendered static. Aset reuse logo yang sudah ada (tak
+  menambah file gambar baru).
