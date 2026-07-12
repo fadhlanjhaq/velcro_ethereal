@@ -71,3 +71,25 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Fade-in halus ────────────────────────────────────────────────────────────
+   Dipakai halaman /info (link-in-bio). Ringan, CSS murni — TIDAK memakai GSAP/
+   ScrollTrigger karena halaman itu satu layar tanpa scroll storytelling. Set
+   fill-mode both agar elemen mulai transparan tanpa flash; delay diatur inline
+   per elemen untuk efek staggered. Reduced-motion otomatis dinetralkan oleh
+   guard di atas (durasi ~0 → langsung ke opacity:1). */
+@keyframes ve-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ve-fade-in {
+  opacity: 0;
+  animation: ve-fade-in-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
