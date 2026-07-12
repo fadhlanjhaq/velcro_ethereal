@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
-import SmoothScrollProvider from "@/components/SmoothScrollProvider";
-import SiteHeader from "@/components/layout/SiteHeader";
-import SiteFooter from "@/components/layout/SiteFooter";
-import { CartProvider } from "@/context/CartContext";
 
 // Body: sans netral (pengganti Calibri yang diminta brief — bukan web font).
 const geistSans = Geist({
@@ -25,6 +21,12 @@ export const metadata: Metadata = {
     "Velcro Ethereal — koleksi jaket heritage dengan bordir artisanal. Warisan yang dirancang untuk abadi.",
 };
 
+/**
+ * Root layout minimal — hanya <html>/<body>, font, dan token global.
+ * Chrome situs utama (SmoothScroll + Cart + SiteHeader/SiteFooter) dipindah ke
+ * route group (main)/layout.tsx supaya halaman standalone seperti /info
+ * (link-in-bio, dibuka dari bio Instagram) TIDAK mewarisi header/footer/cart.
+ */
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -35,15 +37,7 @@ export default function RootLayout({
       lang="id"
       className={`${geistSans.variable} ${cormorant.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <SmoothScrollProvider>
-          <CartProvider>
-            <SiteHeader />
-            {children}
-            <SiteFooter />
-          </CartProvider>
-        </SmoothScrollProvider>
-      </body>
+      <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
 }
