@@ -17,7 +17,40 @@ Pendekatan build: mayoritas sistem (≈90%) dibangun di tahap awal dengan bantua
 
 ---
 
-## 2. Tech Stack & Arsitektur
+## 2. Brand Identity
+
+*(Konteks fondasi brand — jadi acuan untuk copywriting, desain visual, kurasi produk, dan positioning di seluruh platform.)*
+
+**Tagline:** *Every Creation Holds Meaning.*
+
+### 2.1 Positioning Statement
+
+**Bahasa Indonesia:**
+> Velcro Ethereal adalah brand yang lahir dari perpaduan seni dan craftsmanship. Setiap koleksi dibuat dalam jumlah terbatas dengan perhatian penuh pada bordir, material, tekstur, dan setiap detail pengerjaan. Bagi kami, pakaian bukan sekadar produk, melainkan sebuah karya yang membawa makna, karakter, dan identitas. Setiap karya diciptakan untuk menghadirkan nilai yang bertahan lama, bagi mereka yang menghargai kualitas, keaslian, dan ekspresi diri.
+
+**English:**
+> Velcro Ethereal is built on the belief that every creation holds meaning. Inspired by the harmony between art and craftsmanship, each piece is carefully designed with distinctive embroidery, refined materials, and timeless silhouettes. Produced in limited quantities, every garment becomes more than fashion—it becomes a wearable work of art, created for individuals who value character, authenticity, and lasting expression.
+
+### 2.2 Tiga Pilar DNA
+
+| Pilar | Makna |
+|---|---|
+| **Heritage** | Terinspirasi ornamen Nusantara, celtic knot, geometri sakral, serta seni ukir & tenun — akar visual yang kaya budaya. |
+| **Artisan** | Bordir detail, craftsmanship, produksi terbatas, dan kualitas material sebagai standar pengerjaan. |
+| **Eternal** | Filosofi pakaian yang tetap relevan lintas musim dan tren — timeless, bukan sesaat. |
+
+### 2.3 Target Market
+
+Usia 24–45: pengusaha, kreatif profesional, kolektor fashion, dan pecinta seni — **bukan** pasar streetwear massal. Segmen yang mengapresiasi kualitas, keaslian, dan ekspresi diri.
+
+### 2.4 Catatan Sumber
+
+- Tiga pilar DNA (Heritage/Artisan/Eternal) berasal dari **dokumen brand identity awal (PDF client)**.
+- Positioning statement (ID/EN) ditambahkan saat fase **Milestone 7** dan didokumentasikan balik ke SOT ini sebagai referensi resmi.
+
+---
+
+## 3. Tech Stack & Arsitektur
 
 | Layer | Pilihan | Alasan |
 |---|---|---|
@@ -35,7 +68,7 @@ Pendekatan build: mayoritas sistem (≈90%) dibangun di tahap awal dengan bantua
 
 ---
 
-## 3. Model Bisnis & Kepemilikan Infrastruktur
+## 4. Model Bisnis & Kepemilikan Infrastruktur
 
 - **Domain & VPS diprovision dan dipegang oleh developer/agency** (bukan client) — client "menyewa" infrastruktur ini.
 - Karena struktur ini, model bisnis default adalah **subscription + maintenance** (bukan jual putus), karena keberlangsungan situs bergantung pada hosting yang dikelola developer.
@@ -44,16 +77,16 @@ Pendekatan build: mayoritas sistem (≈90%) dibangun di tahap awal dengan bantua
 
 ---
 
-## 4. Modul & Fitur
+## 5. Modul & Fitur
 
-### 4.1 Autentikasi & Akun
+### 5.1 Autentikasi & Akun
 - Register & login (email + password)
 - **Guest checkout diperbolehkan** — akun bersifat opsional, tidak menjadi syarat wajib untuk membeli
 - Session management (Laravel Sanctum untuk auth antara Next.js ↔ Laravel API)
 - Reset password via email
 - Riwayat order & wishlist untuk user yang punya akun
 
-### 4.2 Katalog Produk
+### 5.2 Katalog Produk
 - Kategori: Baju, Jaket, Celana (extensible untuk kategori baru)
 - **Varian produk**: setiap produk punya kombinasi ukuran (S/M/L/XL/dst) × warna, masing-masing kombinasi punya SKU dan stok sendiri
   *(asumsi default — standar untuk clothing e-commerce, silakan koreksi jika beda)*
@@ -61,29 +94,29 @@ Pendekatan build: mayoritas sistem (≈90%) dibangun di tahap awal dengan bantua
 - Search & filter (kategori, ukuran, warna, rentang harga)
 - Deskripsi produk, size guide per produk
 
-### 4.3 Keranjang & Checkout
+### 5.3 Keranjang & Checkout
 - Keranjang persist untuk guest (session-based) dan user login (tersimpan ke akun)
 - Checkout: input alamat, pilih kurir & metode pembayaran, ringkasan order
 - Kalkulasi ongkir real-time via Biteship API
 
-### 4.4 Pembayaran
+### 5.4 Pembayaran
 - Integrasi Midtrans — channel: QRIS, Virtual Account, e-wallet, kartu kredit/cicilan
 - Webhook untuk update status pembayaran otomatis (tanpa konfirmasi manual admin)
 - Invoice otomatis per order
 
-### 4.5 Pengiriman
+### 5.5 Pengiriman
 - Kalkulasi ongkir otomatis (multi-kurir: JNE, J&T, SiCepat, dll via Biteship)
 - Status tracking resi terintegrasi
 - Notifikasi email saat status order berubah (diproses → dikirim → selesai)
 
-### 4.6 Admin Panel (Filament)
+### 5.6 Admin Panel (Filament)
 - **Base tier: single admin** (owner pegang semua akses)
 - **Upsell tier: multi-role** (contoh: staff gudang hanya akses stok, CS hanya akses order, tanpa laporan keuangan)
 - Manajemen produk & varian, stok
 - Manajemen order (lihat, ubah status, cetak invoice/label)
 - Laporan penjualan (basic: harian/bulanan, per produk)
 
-### 4.7 Halaman Konten
+### 5.7 Halaman Konten
 *(standar untuk brand clothing, termasuk sebagai baseline)*
 - About Us
 - Size Guide
@@ -91,7 +124,7 @@ Pendekatan build: mayoritas sistem (≈90%) dibangun di tahap awal dengan bantua
 - Privacy Policy & Syarat & Ketentuan *(wajib ada — disyaratkan Midtrans untuk approval merchant)*
 - Kontak & FAQ
 
-### 4.8 Keamanan & Compliance
+### 5.8 Keamanan & Compliance
 - HTTPS/SSL wajib (disyaratkan payment gateway)
 - Password di-hash (bcrypt/argon2 — standar Laravel)
 - Backup database otomatis harian (bagian dari paket maintenance)
@@ -99,7 +132,7 @@ Pendekatan build: mayoritas sistem (≈90%) dibangun di tahap awal dengan bantua
 
 ---
 
-## 5. Garis Besar Entitas Database
+## 6. Garis Besar Entitas Database
 
 *(high-level, bukan skema final — untuk gambaran cakupan development)*
 
@@ -115,7 +148,7 @@ Pendekatan build: mayoritas sistem (≈90%) dibangun di tahap awal dengan bantua
 
 ---
 
-## 6. Asumsi Terbuka
+## 7. Asumsi Terbuka
 
 Bagian ini berisi keputusan yang diisi dengan best-practice default karena belum dikonfirmasi eksplisit. **Silakan koreksi jika ada yang meleset:**
 
@@ -127,7 +160,7 @@ Bagian ini berisi keputusan yang diisi dengan best-practice default karena belum
 
 ---
 
-## 7. Di Luar Cakupan (Fase Awal)
+## 8. Di Luar Cakupan (Fase Awal)
 
 - Multi-warehouse / multi-gudang
 - Notifikasi WhatsApp (tersedia sebagai upsell terpisah)
@@ -137,7 +170,7 @@ Bagian ini berisi keputusan yang diisi dengan best-practice default karena belum
 
 ---
 
-## 8. Langkah Selanjutnya
+## 9. Langkah Selanjutnya
 
 1. Pricelist tiering (dokumen terpisah, format Excel) — mencakup biaya one-time build vs subscription+maintenance, dengan pass-through cost (Midtrans fee, Biteship API) dijabarkan terpisah dari margin jasa
 2. Wireframe/UI reference (opsional, sebelum development dimulai)
