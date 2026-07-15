@@ -3,12 +3,18 @@ import Image from "next/image";
 import { SiWhatsapp, SiShopee, SiTiktok } from "react-icons/si";
 
 /**
- * Halaman /info — link-in-bio (Milestone 7).
+ * Halaman /info — link-in-bio (Milestone 7), desain "Clock Wall Heritage" (1a).
  *
  * BERDIRI SENDIRI, bukan bagian dari pengalaman situs utama: dibuka lewat tap
  * link di bio Instagram, jadi hub link sementara sambil situs utama masih dalam
  * proses. Sengaja DI LUAR route group (main) → tidak mewarisi SiteHeader/
  * SiteFooter/cart. Prioritas: ringan, cepat dimuat, mobile-first.
+ *
+ * STRUKTUR: satu foto full-bleed (clockwall-bg.jpg) sebagai background seluruh
+ * halaman + overlay gradient gelap, lalu SEMUA konten (logo, kartu foto produk,
+ * tagline, divider, tombol, footer) satu kolom vertikal center di atasnya.
+ * Angka spacing/ukuran mengikuti spek desain 1a; breakpoint desktop di 900px
+ * (via arbitrary variant min-[900px]:, bukan md/lg default Tailwind).
  *
  * CATATAN LINK: whatsapp/shopee/tiktok di bawah masih PLACEHOLDER menunggu data
  * asli dari client (shopee & whatsapp dari brief, tiktok belum diberikan).
@@ -24,7 +30,7 @@ const LINKS = {
 };
 
 export const metadata: Metadata = {
-  title: "Velcro Ethereal — Tautan",
+  title: "Velcro Ethereal",
   description:
     "Hubungi dan belanja Velcro Ethereal — Luxury Heritage Streetwear. WhatsApp, Shopee, dan TikTok resmi.",
 };
@@ -41,103 +47,92 @@ const ACTIVE_LINKS: ActiveLink[] = [
   { label: "Ikuti di TikTok", href: LINKS.tiktok, Icon: SiTiktok },
 ];
 
-// Tepi bawah foto header berbentuk gelombang halus (Milestone 7).
-// Koordinat ternormalisasi 0..1 (objectBoundingBox) → skala ke ukuran header
-// berapa pun. Kurva cubic bezier (smooth, ritme natural — bukan zigzag),
-// karakternya senada motif ombak bordir brand. Baseline 0.93, amplitudo subtle.
-// WAVE_EDGE dipakai ULANG oleh clip-path (bentuk foto) DAN stroke gold (bingkai
-// tipis) supaya garis emas mengikuti kurva PERSIS sama.
-const WAVE_EDGE =
-  "C0.88,0.8967 0.787,0.8967 0.667,0.93 C0.547,0.9633 0.453,0.9633 0.333,0.93 C0.213,0.8967 0.12,0.8967 0,0.93";
-const HEADER_CLIP_PATH = `M0,0 L1,0 L1,0.93 ${WAVE_EDGE} L0,0 Z`;
-const HEADER_WAVE_STROKE = `M1,0.93 ${WAVE_EDGE}`;
+// Overlay gelap di atas foto background: terang di atas (foto masih terbaca),
+// makin pekat ke bawah supaya tombol & teks kontras.
+const OVERLAY_GRADIENT =
+  "linear-gradient(180deg, rgba(15,12,8,.15) 0%, rgba(15,12,8,.35) 40%, rgba(12,9,6,.92) 72%, rgba(10,7,5,.98) 100%)";
 
 export default function InfoPage() {
   return (
     <main className="relative flex-1 overflow-x-hidden bg-ink text-cream">
-      {/* Backdrop watermark logo (Milestone 7b) — hanya di /info.
-          Logo asli (putih/transparan) diulang grid rapat lalu container-nya
-          dirotasi diagonal. Parent `overflow-hidden` mengurung rotasi supaya
-          tidak memunculkan scroll; child oversized (200%) supaya rotasi tak
-          menyisakan celah di sudut. Layer DI ATAS warna dasar ink, DI BAWAH
-          konten (z-10). Opacity rendah → sekadar tekstur latar. */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 overflow-hidden"
-      >
-        <div
-          className="absolute left-1/2 top-1/2 h-[200%] w-[200%] -translate-x-1/2 -translate-y-1/2 rotate-[-22deg] opacity-[0.07]"
-          style={{
-            backgroundImage: "url('/images/logo/velcro-logo.png')",
-            backgroundRepeat: "repeat",
-            backgroundSize: "200px",
-          }}
+      {/* ── Background full-bleed: absolute inset-0 mengikuti tinggi halaman
+          penuh (bukan cuma viewport pertama), object-cover. ── */}
+      <div className="absolute inset-0" aria-hidden>
+        <Image
+          src="/images/brand/clockwall-bg.jpg"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
         />
       </div>
-      <div className="relative z-10 mx-auto flex min-h-full w-full max-w-md flex-col">
-        {/* ── Header: foto brand vertikal, tepi bawah bergelombang + overlay ── */}
-        <header className="ve-fade-in relative h-[46vh] min-h-[300px] w-full">
-          {/* defs clip-path (koordinat objectBoundingBox, skala mengikuti box) */}
-          <svg width="0" height="0" className="absolute" aria-hidden>
-            <defs>
-              <clipPath id="infoHeaderWave" clipPathUnits="objectBoundingBox">
-                <path d={HEADER_CLIP_PATH} />
-              </clipPath>
-            </defs>
-          </svg>
-          {/* Foto + gradient, di-clip jadi tepi bawah bergelombang. */}
-          <div
-            className="absolute inset-0"
-            style={{
-              clipPath: "url(#infoHeaderWave)",
-              WebkitClipPath: "url(#infoHeaderWave)",
-            }}
-          >
-            <Image
-              src="/images/brand/for-info.jpg"
-              alt="Velcro Ethereal"
-              fill
-              priority
-              sizes="(max-width: 448px) 100vw, 448px"
-              className="object-cover"
-            />
-            {/* Gradient ke ink supaya teks di bawah tetap terbaca. */}
-            <div className="absolute inset-0 bg-gradient-to-b from-ink/30 via-ink/10 to-ink" />
-          </div>
-          {/* Bingkai tipis gold mengikuti PERSIS kurva gelombang (stroke-only,
-              vector-effect non-scaling supaya tebal garis konstan). */}
-          <svg
-            className="absolute inset-0 h-full w-full"
-            viewBox="0 0 1 1"
-            preserveAspectRatio="none"
-            aria-hidden
-          >
-            <path
-              d={HEADER_WAVE_STROKE}
-              fill="none"
-              stroke="#B8935A"
-              strokeWidth={2}
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
-          <div className="absolute inset-x-0 bottom-0 flex flex-col items-center px-6 pb-12 text-center">
-            <h1 className="font-serif text-3xl font-medium tracking-wide text-cream sm:text-4xl">
-              VELCRO ETHEREAL
-            </h1>
-            <p className="mt-2 text-[0.7rem] font-medium uppercase tracking-[0.28em] text-gold">
-              Luxury Heritage Streetwear
-            </p>
-          </div>
-        </header>
+      <div
+        className="absolute inset-0 z-[1]"
+        style={{ background: OVERLAY_GRADIENT }}
+        aria-hidden
+      />
 
-        {/* ── Daftar tombol ── */}
-        <nav className="flex flex-col gap-3 px-6 pt-7">
+      {/* ── Kolom konten ── */}
+      <div className="relative z-[2] mx-auto flex min-h-screen w-full max-w-[420px] flex-col items-center px-6 pb-7 pt-9 min-[900px]:min-h-0 min-[900px]:max-w-[640px] min-[900px]:px-12 min-[900px]:py-[72px]">
+        {/* Logo — dipasang apa adanya sesuai spek (width 92px/130px, height
+            auto). PNG-nya kanvas 2000×2000 dengan padding transparan bawaan di
+            sekeliling wordmark; spek mengukur KANVAS, jadi padding itu ikut
+            jadi ruang di sekitar logo. */}
+        <h1 className="ve-fade-in mb-4 min-[900px]:mb-[26px]">
+          <Image
+            src="/images/logo/velcro-logo.png"
+            alt="Velcro Ethereal"
+            width={2000}
+            height={2000}
+            priority
+            className="h-auto w-[92px] min-[900px]:w-[130px]"
+          />
+        </h1>
+
+        {/* Kartu foto produk. Caption "Velcro Collections on 2026" / "Seafarer
+            Wafe Knit" sudah baked-in di asset_04.jpg — BUKAN elemen UI, jangan
+            overlay teks apa pun. Rasio kartu 1/1.02 (hampir persegi) memotong
+            sebagian atas-bawah foto 3:4 (object-cover, center). */}
+        <div
+          className="ve-fade-in relative mb-5 aspect-[1/1.02] w-full overflow-hidden rounded-md shadow-[0_10px_30px_rgba(0,0,0,.4)] min-[900px]:mb-[26px] min-[900px]:max-w-[320px]"
+          style={{ animationDelay: "0.06s" }}
+        >
+          <Image
+            src="/images/product/asset_04.jpg"
+            alt="Velcro Ethereal — Seafarer Wafe Knit, Velcro Collections on 2026"
+            fill
+            priority
+            sizes="(min-width: 900px) 320px, 100vw"
+            className="object-cover"
+          />
+        </div>
+
+        <p
+          className="ve-fade-in mt-[2px] font-serif text-[14px] font-medium uppercase italic tracking-[3px] text-gold min-[900px]:text-[16px]"
+          style={{ animationDelay: "0.12s" }}
+        >
+          Setiap Karya Punya Makna
+        </p>
+        {/* Divider tipis gold: pantulan bayangan emas yang lembut
+            (transparent → gold → transparent), pendek & terpusat. */}
+        <div
+          className="mt-3 h-px w-[38px] min-[900px]:w-[48px]"
+          style={{
+            background:
+              "linear-gradient(to right, transparent, #B8935A, transparent)",
+          }}
+        />
+
+        {/* ── Daftar tombol — mt-auto dorong ke bawah (mobile full-height),
+            pt jaga jarak minimum ke divider saat konten melebihi viewport. ── */}
+        <nav className="mt-auto flex w-full flex-col gap-3 pt-5 min-[900px]:max-w-[400px] min-[900px]:pt-[26px]">
           {/* a. Website Utama — non-aktif (situs utama masih prototipe/simulasi) */}
           <button
             type="button"
             disabled
             aria-disabled="true"
-            className="ve-fade-in flex w-full items-center justify-center gap-2 rounded-full border border-cream/15 px-6 py-4 text-sm font-medium tracking-wide text-cream/40"
+            className="ve-fade-in flex w-full items-center justify-center gap-2 rounded-full border border-cream/15 px-6 py-4 text-sm font-medium tracking-wide text-cream/40 min-[900px]:text-[15px]"
             style={{ animationDelay: "0.08s" }}
           >
             <span>Website</span>
@@ -153,7 +148,7 @@ export default function InfoPage() {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="group ve-fade-in flex w-full items-center justify-center gap-3 rounded-full border border-gold/30 bg-ink-soft px-6 py-4 text-sm font-medium tracking-wide text-cream transition-colors duration-200 hover:border-gold hover:bg-gold hover:text-ink"
+              className="group ve-fade-in flex w-full items-center justify-center gap-3 rounded-full border border-gold/30 bg-ink-soft px-6 py-4 text-sm font-medium tracking-wide text-cream transition-colors duration-200 hover:border-gold hover:bg-gold hover:text-ink min-[900px]:text-[15px]"
               style={{ animationDelay: `${0.16 + i * 0.08}s` }}
             >
               <Icon className="text-lg text-gold transition-colors duration-200 group-hover:text-ink" aria-hidden />
@@ -163,7 +158,7 @@ export default function InfoPage() {
         </nav>
 
         {/* ── Footer minimal ── */}
-        <footer className="ve-fade-in mt-auto px-6 pb-8 pt-10 text-center" style={{ animationDelay: "0.4s" }}>
+        <footer className="ve-fade-in mt-[18px] text-center" style={{ animationDelay: "0.4s" }}>
           <p className="text-[0.7rem] uppercase tracking-[0.2em] text-cream/35">
             © {new Date().getFullYear()} Velcro Ethereal
           </p>
