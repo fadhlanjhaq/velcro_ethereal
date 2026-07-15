@@ -506,3 +506,95 @@ Iterasi final — **watermark logo asli**, BUKAN pattern/foto buatan:
   tetap fokus utama; tanpa horizontal/vertical scroll dari rotasi. `tsc` + `eslint`
   bersih; `/info` tetap prerendered static. Aset reuse logo yang sudah ada (tak
   menambah file gambar baru).
+
+---
+
+## Milestone 8 — Halaman /coming-soon + Gate Produksi
+**Tanggal:** 15 Juli 2026
+**Status:** Selesai
+
+Ringkasan: Halaman "segera hadir" (desain "Clock Wall Heritage", dari file
+referensi `public/design-reference/` — dihapus setelah build ini selesai,
+sesuai instruksi kebersihan) + mekanisme gate yang mengarahkan seluruh route
+situs utama ke halaman ini sebelum resmi rilis ke publik.
+
+Bagian A — `app/coming-soon/page.tsx`. Standalone, DI LUAR route group
+`(main)` (pola sama seperti `/info` di Milestone 7) — tidak mewarisi
+SiteHeader/SiteFooter/cart. Reuse `images/brand/clockwall-bg.jpg` (aset yang
+sama dengan `/info`) sebagai background, dengan treatment overlay
+(`brightness(.4) saturate(.9)` pada foto + gradient gelap di atasnya) persis
+mengikuti file referensi desain.
+
+Penyesuaian dari file referensi (dikonfirmasi user sebelum build):
+- **Font Playfair Display** — dipakai untuk wordmark & headline, tapi
+  di-load via `next/font/google` **langsung di `page.tsx`**, BUKAN ditambahkan
+  ke `app/layout.tsx` root. Supaya halaman lain yang tidak memakai font ini
+  tidak ikut menanggung beban loading tambahan — next/font otomatis
+  code-split per rute selama tidak diimpor di layout bersama.
+- **Warna gold `#c9a961`** — dipertahankan dari referensi, tapi ini
+  **PENGECUALIAN DISENGAJA**, bukan token `--color-gold` (`#b8935a`) yang
+  dipakai di seluruh halaman lain sejak Milestone 4. Dibatasi hanya untuk
+  `/coming-soon`, ditandai eksplisit di komentar `page.tsx` (konstanta
+  `CS_GOLD`) — supaya sesi berikutnya tidak salah kira dua warna gold
+  berdampingan ini adalah bug yang perlu "diperbaiki" jadi satu token.
+- **Tanggal spesifik dihapus.** Referensi asli bertuliskan "Hadir Awal
+  Agustus 2026" — diganti "Segera Hadir" (general, tanpa komitmen tanggal)
+  supaya halaman tidak perlu di-update ulang kalau timeline rilis bergeser.
+- **CTA diperbaiki dari artefak tools desain.** Referensi HTML mengarah ke
+  `./Velcro Info 1a - Clock Wall Heritage.dc.html` (link relatif ke file
+  mockup desain, tidak valid di aplikasi sungguhan) dan berlabel "Kunjungi
+  Halaman Belanja". Diganti label **"More Info"** → `href="/info"` (route
+  asli yang sudah ada sejak Milestone 7).
+
+Bagian B — `src/proxy.ts` (⚠️ **BUKAN `middleware.ts`** seperti yang biasa
+dikenal di training data/dokumentasi lama Next.js — lihat `apps/web/AGENTS.md`:
+codebase ini pakai Next.js 16.2.10, dan sejak v16 konvensi `middleware.ts`
+di-deprecate & di-rename jadi `proxy.ts`/`export function proxy` — nama fungsi
+JUGA berubah dari `middleware` ke `proxy`, bukan cuma nama file. Dikonfirmasi
+langsung dari `node_modules/next/dist/docs/01-app/02-guides/upgrading/
+version-16.md` sebelum menulis kode, sesuai instruksi `AGENTS.md`. `middleware.ts`
+kemungkinan besar masih akan berjalan sebagai fallback edge-runtime, tapi
+konvensi standar & yang didukung penuh sekarang adalah `proxy.ts`.):
+- Redirect route `(main)` (`/`, `/shop`, `/shop/:path*`, `/cart`, `/checkout`,
+  `/checkout/:path*`) ke `/coming-soon` — daftar route ini dipakai langsung
+  sebagai `matcher` (positive list), bukan negative-lookahead di seluruh situs.
+  Otomatis mengecualikan `/info`, `/coming-soon` sendiri (cegah redirect loop),
+  dan semua asset statis (`_next/*`, favicon, dll) karena memang tidak pernah
+  masuk daftar match.
+- **Kondisi gate aktif: `NODE_ENV === "production"` DAN
+  `NEXT_PUBLIC_SITE_LIVE !== "true"`.** Cek `NODE_ENV` disengaja ditambahkan di
+  luar instruksi awal (yang hanya menyebut `NEXT_PUBLIC_SITE_LIVE`) — tanpa itu,
+  `npm run dev` lokal ikut ter-gate secara default (env var memang tak pernah
+  di-set di dev), padahal requirement eksplisit adalah dev harian TIDAK BOLEH
+  ter-gate tanpa setup tambahan apa pun. Konsekuensinya: `npm run build && npm
+  start` lokal (stack validasi pra-deploy, lihat Milestone 2) IKUT ter-gate
+  secara default — ini disengaja, env-nya paritas dengan production sungguhan.
+- **Cara mengaktifkan/menonaktifkan gate (dibutuhkan lagi saat persiapan
+  deploy):** set env var `NEXT_PUBLIC_SITE_LIVE=true` di environment
+  production (mis. `docker-compose.yml` service `web`, atau `.env` di VPS)
+  untuk MEMATIKAN gate & membuka situs utama ke publik. Selama var ini belum
+  di-set (atau bernilai selain `"true"`), production build otomatis
+  menampilkan `/coming-soon` untuk semua route `(main)`. Tidak perlu diubah
+  apa pun untuk dev harian (`npm run dev`) — gate tidak pernah aktif di sana.
+
+Verifikasi: `npx tsc --noEmit`, `npx eslint .`, dan `npm run build` (Turbopack)
+bersih — build log mengonfirmasi `proxy.ts` terdeteksi sebagai `ƒ Proxy
+(Middleware)` dan `/coming-soon` prerendered static. Perilaku gate dicek di
+tiga kondisi via `curl`:
+1. `npm run dev` (NODE_ENV development, tanpa `NEXT_PUBLIC_SITE_LIVE`) — `GET /`
+   & `GET /shop` → `200`, tanpa redirect. Gate MATI seperti seharusnya.
+2. `npm run start` production tanpa `NEXT_PUBLIC_SITE_LIVE` — `GET /` & `GET
+   /shop` → `307` ke `/coming-soon`; `GET /info` tetap `200` (tidak ikut
+   ter-redirect, tidak ada loop).
+3. `npm run start` dengan `NEXT_PUBLIC_SITE_LIVE=true` — `GET /` & `GET /shop`
+   → `200`, gate MATI (situs live).
+
+Bagian C — Kebersihan: `public/design-reference/` (file HTML + mockup PNG
+acuan desain) dihapus seluruhnya setelah implementasi selesai, sesuai
+instruksi task — nilai referensinya sudah terserap ke dalam kode & catatan
+milestone ini.
+
+Batasan (sesuai brief, tidak dikerjakan): `/info` tidak disentuh sama sekali
+(tetap fully accessible, tidak ikut di-gate); tidak ada commit (menunggu
+pengecekan visual manual dari user); `.env` tidak di-commit; belum push ke
+GitHub.
