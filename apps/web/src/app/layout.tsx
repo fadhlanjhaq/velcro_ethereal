@@ -16,7 +16,7 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Velcro Ethereal — Heritage Wearables",
+  title: "Velcro Ethereal",
   description:
     "Velcro Ethereal — koleksi jaket heritage dengan bordir artisanal. Warisan yang dirancang untuk abadi.",
 };
