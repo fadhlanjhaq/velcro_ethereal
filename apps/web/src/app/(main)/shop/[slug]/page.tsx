@@ -13,11 +13,11 @@ export async function generateMetadata(
   const product = await getProductBySlug(slug);
 
   if (!product) {
-    return { title: "Velcro Ethereal" };
+    return { title: "Product Not Found — Velcro Ethereal" };
   }
 
   return {
-    title: "Velcro Ethereal",
+    title: `${product.name} — Velcro Ethereal`,
     description: product.description,
   };
 }

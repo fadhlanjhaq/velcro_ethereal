@@ -5,7 +5,7 @@ import { getProducts, formatRupiah } from "@/lib/api";
 import PhotoFallback from "@/components/shop/PhotoFallback";
 
 export const metadata: Metadata = {
-  title: "Velcro Ethereal",
+  title: "Velcro Ethereal — Collection",
   description:
     "Katalog lengkap Heritage Collection — jaket dengan bordir artisanal.",
 };

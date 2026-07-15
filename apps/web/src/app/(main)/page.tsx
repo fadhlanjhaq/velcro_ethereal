@@ -1,9 +1,14 @@
+import type { Metadata } from "next";
 import Hero from "@/components/landing/Hero";
 import BrandStory from "@/components/landing/BrandStory";
 import FeaturedProducts from "@/components/landing/FeaturedProducts";
 import Craftsmanship from "@/components/landing/Craftsmanship";
 import ClosingCta from "@/components/landing/ClosingCta";
 import { getProducts } from "@/lib/api";
+
+export const metadata: Metadata = {
+  title: "Velcro Ethereal",
+};
 
 /**
  * Landing page Velcro Ethereal.
