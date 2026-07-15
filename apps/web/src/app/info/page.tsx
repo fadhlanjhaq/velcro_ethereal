@@ -30,7 +30,7 @@ const LINKS = {
 };
 
 export const metadata: Metadata = {
-  title: "Velcro Ethereal",
+  title: "Velcro Ethereal — Info",
   description:
     "Hubungi dan belanja Velcro Ethereal — Luxury Heritage Streetwear. WhatsApp, Shopee, dan TikTok resmi.",
 };
@@ -74,7 +74,7 @@ export default function InfoPage() {
       />
 
       {/* ── Kolom konten ── */}
-      <div className="relative z-[2] mx-auto flex min-h-screen w-full max-w-[420px] flex-col items-center px-6 pb-7 pt-9 min-[900px]:min-h-0 min-[900px]:max-w-[640px] min-[900px]:px-12 min-[900px]:py-[72px]">
+      <div className="relative z-[2] mx-auto flex min-h-screen w-full max-w-[420px] flex-col items-center justify-center px-6 pb-7 pt-9 min-[900px]:min-h-0 min-[900px]:max-w-[640px] min-[900px]:px-12 min-[900px]:py-[72px]">
         {/* Logo — dipasang apa adanya sesuai spek (width 92px/130px, height
             auto). PNG-nya kanvas 2000×2000 dengan padding transparan bawaan di
             sekeliling wordmark; spek mengukur KANVAS, jadi padding itu ikut
@@ -109,8 +109,11 @@ export default function InfoPage() {
         </div>
 
         <p
-          className="ve-fade-in mt-[2px] font-serif text-[14px] font-medium uppercase italic tracking-[3px] text-gold min-[900px]:text-[16px]"
-          style={{ animationDelay: "0.12s" }}
+          className="ve-fade-in mt-[2px] w-fit rounded-full px-4 py-1.5 font-serif text-[14px] font-medium uppercase italic tracking-[3px] text-gold backdrop-blur-[8px] min-[900px]:text-[16px]"
+          style={{
+            animationDelay: "0.12s",
+            background: "rgba(10,7,5,.55)",
+          }}
         >
           Setiap Karya Punya Makna
         </p>
@@ -124,9 +127,11 @@ export default function InfoPage() {
           }}
         />
 
-        {/* ── Daftar tombol — mt-auto dorong ke bawah (mobile full-height),
-            pt jaga jarak minimum ke divider saat konten melebihi viewport. ── */}
-        <nav className="mt-auto flex w-full flex-col gap-3 pt-5 min-[900px]:max-w-[400px] min-[900px]:pt-[26px]">
+        {/* ── Daftar tombol — margin-top tetap (bukan mt-auto) supaya jarak
+            dari divider proporsional & konsisten di semua tinggi viewport;
+            seluruh blok konten dipusatkan sebagai satu kesatuan lewat
+            justify-center di container kolom, bukan dipisah grup atas/bawah. ── */}
+        <nav className="mt-8 flex w-full flex-col gap-3 min-[900px]:mt-10 min-[900px]:max-w-[400px]">
           {/* a. Website Utama — non-aktif (situs utama masih prototipe/simulasi) */}
           <button
             type="button"
