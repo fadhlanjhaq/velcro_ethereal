@@ -56,8 +56,13 @@ export default function InfoPage() {
   return (
     <main className="relative flex-1 overflow-x-hidden bg-ink text-cream">
       {/* ── Background full-bleed: absolute inset-0 mengikuti tinggi halaman
-          penuh (bukan cuma viewport pertama), object-cover. ── */}
-      <div className="absolute inset-0" aria-hidden>
+          penuh (bukan cuma viewport pertama), object-cover. Blur halus supaya
+          tekstur ramai clock-wall tidak bersaing dengan konten di atasnya
+          (foto produk asset_04.jpg TIDAK di-blur — hanya background ini).
+          scale(1.08) WAJIB menyertai blur: filter blur "memudarkan" pixel di
+          tepi gambar, scale mendorong tepi buram itu keluar dari area
+          terlihat; overflow-hidden pada wrapper meng-clip sisa bleed-nya. ── */}
+      <div className="absolute inset-0 overflow-hidden" aria-hidden>
         <Image
           src="/images/brand/clockwall-bg.jpg"
           alt=""
@@ -65,6 +70,7 @@ export default function InfoPage() {
           priority
           sizes="100vw"
           className="object-cover"
+          style={{ filter: "blur(4px)", transform: "scale(1.08)" }}
         />
       </div>
       <div
