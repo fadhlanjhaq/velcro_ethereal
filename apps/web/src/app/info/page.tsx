@@ -24,9 +24,9 @@ import { SiWhatsapp, SiShopee, SiTiktok } from "react-icons/si";
 
 // ── Ubah link di sini ────────────────────────────────────────────────────────
 const LINKS = {
-  whatsapp: "https://wa.me/628131453336",
   shopee: "https://id.shp.ee/PF2SRdhu",
   tiktok: "https://www.tiktok.com/@velcroethereal", // PLACEHOLDER — tunggu data client
+  whatsapp: "https://wa.me/628131453336",
 };
 
 export const metadata: Metadata = {
@@ -42,9 +42,9 @@ type ActiveLink = {
 };
 
 const ACTIVE_LINKS: ActiveLink[] = [
-  { label: "Hubungi via WhatsApp", href: LINKS.whatsapp, Icon: SiWhatsapp },
   { label: "Belanja di Shopee", href: LINKS.shopee, Icon: SiShopee },
   { label: "Ikuti di TikTok", href: LINKS.tiktok, Icon: SiTiktok },
+  { label: "Hubungi via WhatsApp", href: LINKS.whatsapp, Icon: SiWhatsapp },
 ];
 
 // Overlay gelap di atas foto background: terang di atas (foto masih terbaca),
