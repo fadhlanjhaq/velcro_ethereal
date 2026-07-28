@@ -2,6 +2,11 @@
 .DS_Store
 Thumbs.db
 
+# --- Root env (shared/dev, repo root only) ---
+.env
+.env.local
+.env.*.local
+
 # --- PHP / Laravel (apps/api) ---
 apps/api/vendor/
 apps/api/node_modules/
