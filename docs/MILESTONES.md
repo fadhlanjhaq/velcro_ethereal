@@ -598,3 +598,98 @@ Batasan (sesuai brief, tidak dikerjakan): `/info` tidak disentuh sama sekali
 (tetap fully accessible, tidak ikut di-gate); tidak ada commit (menunggu
 pengecekan visual manual dari user); `.env` tidak di-commit; belum push ke
 GitHub.
+
+---
+
+## Milestone 9 — Redesign SiteHeader, Sistem Font Jost/Cormorant Italic, & Fix Replay Animasi Scroll
+**Tanggal:** 28 Juli 2026
+**Status:** Selesai
+
+Tiga pekerjaan independen di `apps/web`, tidak menyentuh `apps/api`.
+
+Bagian A — Redesign `components/layout/SiteHeader.tsx`. Header sebelumnya
+(Milestone 6) cuma wordmark + ikon keranjang polos, tanpa nav sama sekali.
+Dibangun ulang jadi header dua baris fixed:
+- **Announcement bar** (baris paling atas): copy shipping/limited production/
+  authenticity, dipisah "·", uppercase, di atas divider gold tipis.
+- **Nav section**: Koleksi / Filosofi / Craftsmanship — link ke anchor id di
+  homepage (`#koleksi` ditambahkan baru ke `FeaturedProducts.tsx`; `#filosofi`
+  & `#craftsmanship` sudah ada). Marketplace & Kontak sengaja dibuat
+  placeholder non-navigasi (`preventDefault` + tooltip "Segera hadir"),
+  BUKAN `href="#"` polos yang melompat ke atas halaman.
+- **Ikon keranjang** diganti dari glyph polos jadi glyph yang sama di dalam
+  lingkaran border gold; badge count tidak berubah.
+- **Mobile hamburger**: nav collapse jadi dropdown di bawah breakpoint `lg`.
+- Klik nav anchor pakai hook baru `useLenis()` (`SmoothScrollProvider.tsx`,
+  expose instance Lenis aktif via Context) supaya smooth-scroll konsisten
+  lewat Lenis, bukan native hash jump; fallback ke `scrollIntoView` kalau
+  Lenis tidak aktif (reduced-motion). Offset scroll dihitung dari tinggi
+  header aktual (`headerRef.offsetHeight`), bukan angka hardcode, supaya
+  tetap benar kalau announcement bar wrap 2 baris di layar sempit.
+  `scroll-mt-24` → `scroll-mt-32` di BrandStory/Craftsmanship untuk
+  menyesuaikan header yang kini lebih tinggi.
+
+**Catatan penting — item yang TIDAK jadi bagian pekerjaan ini** (sempat
+disebut di rencana awal, dicek via `git diff` sebelum commit dan ternyata
+belum ada di kode, dicatat di sini supaya sesi berikutnya tidak salah kira
+sudah selesai): dropdown "Collections" dengan 4 kategori (Jackets/Knitwear/
+Pants/Footwear & Accessories), penghapusan Filosofi/Craftsmanship dari nav,
+dan resize/bold logo wordmark. Nav tetap 5 item flat (Koleksi/Filosofi/
+Craftsmanship/Marketplace/Kontak), logo tetap ukuran & weight semula.
+
+Bagian B — Sistem font (`app/layout.tsx`, `app/globals.css`):
+- **Jost** (`next/font/google`, weight 300–700) dimuat untuk semua teks
+  UI/label kecil uppercase berspasi lebar — announcement bar, nav, badge
+  keranjang — dialiaskan ke token `--font-jost` (pola sama dengan
+  `--font-serif`/`--font-sans` yang sudah ada) sehingga jadi utility Tailwind
+  `font-jost`, bukan hardcode di banyak tempat. Announcement bar dipakai
+  `font-semibold` (600) — 300 & 700 juga dicoba, 600 paling dekat ke acuan
+  visual di ukuran teks sekecil itu.
+- **Cormorant Garamond italic**: config sebelumnya (Milestone 4) cuma
+  memuat `style: ["normal"]`, sehingga `italic` class yang sudah dipakai di
+  Hero ("Ethereal") sebenarnya faux-italic hasil sintesis browser, bukan
+  glyph italic asli. Ditambahkan `style: ["normal", "italic"]` supaya italic
+  di seluruh situs pakai font-face asli.
+- Italic diterapkan **selektif**, bukan bulk — hanya ke 3 heading pendek
+  bersifat statement filosofis/naratif (mirip tagline booklet brand): h2
+  BrandStory ("Tiga prinsip yang menjahit setiap helai."), h2 Craftsmanship
+  ("Ditenun perlahan, dijahit untuk bertahan."), h2 ClosingCta ("Kenakan
+  warisan yang dirancang untuk abadi."). Label eyebrow section ("Filosofi",
+  "Craftsmanship"), judul pilar (Heritage/Artisan/Eternal), body paragraph,
+  serta semua heading lain (FeaturedProducts, SiteFooter, shop/cart/checkout)
+  TETAP upright — itu label struktural, bukan kalimat naratif.
+
+Bagian C — Fix replay animasi ScrollTrigger (`BrandStory.tsx` ×2,
+`Craftsmanship.tsx`, `FeaturedProducts.tsx`, `ClosingCta.tsx`). Semua reveal
+animation di section ini sebelumnya memakai default implisit GSAP
+`toggleActions: "play none none none"` (tidak pernah di-set eksplisit) — main
+sekali di viewport pertama, lalu diam walau di-scroll lewat berkali-kali.
+Ditambahkan `toggleActions: "play reverse play reverse"` eksplisit supaya
+tiap section replay setiap kali masuk viewport, dari arah mana pun, dan reset
+ke hidden saat keluar. Tidak ada penanganan khusus yang diperlukan untuk
+SplitText headline BrandStory (split kata terjadi sekali saat mount; replay
+cukup memutar ulang tween yang sama pada elemen kata yang sama). Dua
+`data-parallax` scrub trigger di Craftsmanship TIDAK disentuh — animasi
+scrub sudah otomatis reversible karena transform-nya fungsi langsung dari
+posisi scroll.
+
+Batasan (sesuai brief, tidak dikerjakan): tidak ada perubahan
+`context/CartContext.tsx` atau logic checkout (murni visual/struktural
+header + font + animasi); dropdown Collections/nav-restructure/resize logo
+(lihat catatan di Bagian A); `apps/api` tidak disentuh; `.env` tidak
+di-commit.
+
+Verifikasi: `npx tsc --noEmit` & `npx eslint` bersih di setiap tahap
+perubahan. Dev server + Playwright (Chrome headless) dipakai berulang kali
+sepanjang pekerjaan ini untuk screenshot desktop (1440px) & mobile (390px)
+— announcement bar, nav, ikon keranjang lingkaran, hamburger mobile, dan
+heading italic semua diverifikasi tampil sesuai. Untuk perubahan font-weight
+announcement bar, dev server di-restart penuh (`.next` dihapus, proses lama
+di-kill) karena next/font/google perlu regenerasi file font per weight —
+tidak cukup hot-reload — lalu diverifikasi ulang jumlah file `.woff2` yang
+benar-benar termuat browser (bukan cuma computed CSS) untuk memastikan
+weight baru benar-benar ter-render, bukan cuma benar di kode. Untuk fix
+replay animasi: diverifikasi via scroll terprogram naik-turun berkali-kali
+(termasuk kunjungan ketiga ke section yang sama) dan via klik nyata pada nav
+link dari bagian bawah halaman (real Lenis `scrollTo`, bukan simulasi) —
+kedua jalur mengonfirmasi replay bekerja tanpa logic tambahan terpisah.
