@@ -110,8 +110,7 @@ export default function Hero() {
           data-hero-tagline
           className="mt-8 max-w-md text-balance text-base leading-relaxed text-cream/80 sm:text-lg"
         >
-          Bordir tangan, ditenun dari warisan — pakaian yang dirancang untuk
-          melampaui musim.
+          Every Creation Holds Meaning
         </p>
 
         {/* Scroll cue */}
@@ -120,7 +119,7 @@ export default function Hero() {
           className="mt-16 flex flex-col items-center gap-3 text-cream/60"
         >
           <span className="text-[0.65rem] uppercase tracking-[0.3em]">
-            Gulir
+            Scroll down
           </span>
           <span
             data-hero-cue-line
