@@ -95,7 +95,7 @@ export default function Craftsmanship() {
           <h2
             id="craft-heading"
             data-craft-reveal
-            className="font-serif text-4xl font-light leading-tight text-cream sm:text-5xl"
+            className="font-serif text-4xl font-light italic leading-tight text-cream sm:text-5xl"
           >
             Ditenun perlahan, dijahit untuk bertahan.
           </h2>

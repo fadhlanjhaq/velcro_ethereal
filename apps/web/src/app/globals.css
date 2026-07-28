@@ -31,6 +31,8 @@
     serif;
   --font-sans: var(--font-geist-sans), Calibri, system-ui, -apple-system,
     sans-serif;
+  /* Label UI: uppercase berspasi lebar — nav, announcement bar, badge. */
+  --font-jost: var(--font-jost-google), system-ui, -apple-system, sans-serif;
 }
 
 :root {

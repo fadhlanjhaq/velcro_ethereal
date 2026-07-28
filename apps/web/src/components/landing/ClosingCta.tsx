@@ -49,7 +49,7 @@ export default function ClosingCta() {
       </p>
       <h2
         data-cta-reveal
-        className="max-w-2xl font-serif text-4xl font-light leading-tight text-cream sm:text-6xl"
+        className="max-w-2xl font-serif text-4xl font-light italic leading-tight text-cream sm:text-6xl"
       >
         Kenakan warisan yang dirancang untuk abadi.
       </h2>

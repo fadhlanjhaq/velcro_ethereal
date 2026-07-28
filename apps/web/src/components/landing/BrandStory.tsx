@@ -114,7 +114,7 @@ export default function BrandStory() {
         <h2
           id="brandstory-heading"
           ref={heading}
-          className="max-w-3xl font-serif text-4xl font-light leading-tight text-cream sm:text-6xl"
+          className="max-w-3xl font-serif text-4xl font-light italic leading-tight text-cream sm:text-6xl"
         >
           Tiga prinsip yang menjahit setiap helai.
         </h2>
