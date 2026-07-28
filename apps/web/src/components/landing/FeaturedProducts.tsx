@@ -49,7 +49,8 @@ export default function FeaturedProducts({
   return (
     <section
       ref={root}
-      className="bg-cream px-6 py-28 text-ink sm:py-40"
+      id="koleksi"
+      className="scroll-mt-32 bg-cream px-6 py-28 text-ink sm:py-40"
       aria-labelledby="featured-heading"
     >
       <div className="mx-auto max-w-6xl">

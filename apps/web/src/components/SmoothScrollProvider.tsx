@@ -1,12 +1,27 @@
 "use client";
 
-import { useEffect } from "react";
+import { createContext, useContext, useEffect, useRef } from "react";
 import Lenis from "lenis";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 // Daftarkan ScrollTrigger sekali di sisi client. Aman dipanggil berulang.
 gsap.registerPlugin(ScrollTrigger);
+
+const LenisContext = createContext<React.RefObject<Lenis | null> | null>(
+  null,
+);
+
+/**
+ * Akses instance Lenis yang sedang aktif (mis. dari SiteHeader untuk
+ * scroll-to-section pada anchor link nav, supaya konsisten smooth-scroll
+ * dan tidak native jump). Mengembalikan null di luar provider, atau ref
+ * dengan `.current === null` kalau reduced-motion aktif / belum mount —
+ * caller wajib fallback ke `scrollIntoView` native di kondisi itu.
+ */
+export function useLenis() {
+  return useContext(LenisContext);
+}
 
 /**
  * Wrapper smooth-scroll (Lenis) yang disinkronkan dengan GSAP ScrollTrigger.
@@ -25,6 +40,8 @@ export default function SmoothScrollProvider({
 }: {
   children: React.ReactNode;
 }) {
+  const lenisRef = useRef<Lenis | null>(null);
+
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -41,6 +58,7 @@ export default function SmoothScrollProvider({
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
     });
+    lenisRef.current = lenis;
 
     // Lenis memberi tahu ScrollTrigger setiap kali posisi scroll berubah.
     lenis.on("scroll", ScrollTrigger.update);
@@ -54,9 +72,12 @@ export default function SmoothScrollProvider({
 
     return () => {
       gsap.ticker.remove(raf);
+      lenisRef.current = null;
       lenis.destroy();
     };
   }, []);
 
-  return <>{children}</>;
+  return (
+    <LenisContext.Provider value={lenisRef}>{children}</LenisContext.Provider>
+  );
 }

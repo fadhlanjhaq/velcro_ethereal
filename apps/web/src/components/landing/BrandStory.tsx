@@ -104,7 +104,7 @@ export default function BrandStory() {
     <section
       ref={root}
       id="filosofi"
-      className="relative scroll-mt-24 bg-ink px-6 py-28 sm:py-40"
+      className="relative scroll-mt-32 bg-ink px-6 py-28 sm:py-40"
       aria-labelledby="brandstory-heading"
     >
       <div className="mx-auto max-w-6xl">
