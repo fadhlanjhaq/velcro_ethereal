@@ -5,18 +5,10 @@ import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { useLenis } from "@/components/SmoothScrollProvider";
-
-/**
- * Menu section homepage. `hash` merujuk ke id section di
- * `(main)/page.tsx` (Hero → BrandStory#filosofi → FeaturedProducts#koleksi →
- * Craftsmanship#craftsmanship). Href selalu diawali "/" supaya tetap benar
- * saat diklik dari /shop, /cart, /checkout (bukan cuma "#hash").
- */
-const SECTION_NAV_ITEMS = [
-  { label: "Koleksi", hash: "koleksi" },
-  { label: "Filosofi", hash: "filosofi" },
-  { label: "Craftsmanship", hash: "craftsmanship" },
-] as const;
+import {
+  CollectionsAccordionMobile,
+  CollectionsDropdownDesktop,
+} from "@/components/layout/CollectionsNav";
 
 /**
  * MARKETPLACE & KONTAK belum punya halaman/tujuan nyata (di luar cakupan
@@ -86,22 +78,16 @@ export default function SiteHeader() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link
             href="/"
-            className="font-serif text-sm font-medium uppercase tracking-[0.35em] text-cream transition-colors hover:text-gold"
+            className="font-serif text-base font-bold uppercase tracking-[0.18em] text-cream transition-colors hover:text-gold sm:text-xl sm:tracking-[0.3em] lg:text-2xl lg:tracking-[0.35em]"
           >
             Velcro&nbsp;Ethereal
           </Link>
 
           <nav className="hidden items-center gap-8 lg:flex">
-            {SECTION_NAV_ITEMS.map((item) => (
-              <Link
-                key={item.hash}
-                href={`/#${item.hash}`}
-                onClick={(event) => handleSectionLink(event, item.hash)}
-                className={navLinkClass}
-              >
-                {item.label}
-              </Link>
-            ))}
+            <CollectionsDropdownDesktop
+              triggerClassName={navLinkClass}
+              onSectionLink={handleSectionLink}
+            />
             {PLACEHOLDER_NAV_ITEMS.map((label) => (
               <a
                 key={label}
@@ -175,16 +161,10 @@ export default function SiteHeader() {
         {/* Mobile menu */}
         {mobileOpen && (
           <nav className="flex flex-col border-t border-cream/10 bg-ink px-6 py-4 lg:hidden">
-            {SECTION_NAV_ITEMS.map((item) => (
-              <Link
-                key={item.hash}
-                href={`/#${item.hash}`}
-                onClick={(event) => handleSectionLink(event, item.hash)}
-                className={`${navLinkClass} py-3`}
-              >
-                {item.label}
-              </Link>
-            ))}
+            <CollectionsAccordionMobile
+              triggerClassName={`${navLinkClass} py-3`}
+              onSectionLink={handleSectionLink}
+            />
             {PLACEHOLDER_NAV_ITEMS.map((label) => (
               <a
                 key={label}
