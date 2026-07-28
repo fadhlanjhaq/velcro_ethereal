@@ -71,6 +71,7 @@ export default function BrandStory() {
           scrollTrigger: {
             trigger: heading.current,
             start: "top 85%",
+            toggleActions: "play reverse play reverse",
           },
         });
 
@@ -88,6 +89,7 @@ export default function BrandStory() {
           scrollTrigger: {
             trigger: "[data-pillar-grid]",
             start: "top 82%",
+            toggleActions: "play reverse play reverse",
           },
         });
 

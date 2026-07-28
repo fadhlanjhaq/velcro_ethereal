@@ -38,6 +38,7 @@ export default function FeaturedProducts({
           scrollTrigger: {
             trigger: "[data-product-grid]",
             start: "top 80%",
+            toggleActions: "play reverse play reverse",
           },
         });
       });

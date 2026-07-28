@@ -25,7 +25,11 @@ export default function ClosingCta() {
           duration: 1.1,
           ease: "power3.out",
           stagger: 0.15,
-          scrollTrigger: { trigger: root.current, start: "top 75%" },
+          scrollTrigger: {
+            trigger: root.current,
+            start: "top 75%",
+            toggleActions: "play reverse play reverse",
+          },
         });
       });
     },

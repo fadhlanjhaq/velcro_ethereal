@@ -48,7 +48,11 @@ export default function Craftsmanship() {
           duration: 1,
           ease: "power3.out",
           stagger: 0.15,
-          scrollTrigger: { trigger: "[data-craft-copy]", start: "top 80%" },
+          scrollTrigger: {
+            trigger: "[data-craft-copy]",
+            start: "top 80%",
+            toggleActions: "play reverse play reverse",
+          },
         });
       });
     },
