@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Kategori dropdown "Collections" — PLACEHOLDER. Semua kategori mengarah ke
@@ -44,6 +44,7 @@ export function CollectionsDropdownDesktop({
 }) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const cancelClose = () => {
     if (closeTimer.current) {
@@ -55,9 +56,35 @@ export function CollectionsDropdownDesktop({
     cancelClose();
     closeTimer.current = setTimeout(() => setOpen(false), CLOSE_DELAY_MS);
   };
+  const closeNow = () => {
+    cancelClose();
+    setOpen(false);
+  };
+
+  /** Jaring pengaman: trackpad/layar sentuh yang terdeteksi browser sebagai
+   * "touch" bisa memicu `mouseenter` sintetis saat tap (supaya CSS `:hover`
+   * tetap jalan di perangkat itu) tanpa pernah mengirim `mouseleave`
+   * pasangannya — dropdown jadi nyangkut terbuka walau tidak ada cursor yang
+   * benar-benar hover. Tap/klik di luar trigger+panel selalu menutup paksa,
+   * terlepas dari kenapa state-nya bisa nyangkut. */
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDownOutside(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        cancelClose();
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDownOutside);
+    return () =>
+      document.removeEventListener("pointerdown", handlePointerDownOutside);
+  }, [open]);
 
   return (
     <div
+      ref={containerRef}
       className="relative"
       onMouseEnter={() => {
         cancelClose();
@@ -82,12 +109,15 @@ export function CollectionsDropdownDesktop({
             : "invisible -translate-y-1 opacity-0"
         }`}
       >
-        <div className="overflow-hidden rounded-sm border border-gold/25 bg-ink shadow-lg shadow-black/40">
+        <div className="overflow-hidden rounded-sm border border-gold/25 bg-ink-soft/90 shadow-lg shadow-black/40 backdrop-blur-md">
           {COLLECTION_CATEGORIES.map((category) => (
             <Link
               key={category.label}
               href={`/#${category.hash}`}
-              onClick={(event) => onSectionLink(event, category.hash)}
+              onClick={(event) => {
+                closeNow();
+                onSectionLink(event, category.hash);
+              }}
               className={dropdownItemClass}
             >
               {category.label}
