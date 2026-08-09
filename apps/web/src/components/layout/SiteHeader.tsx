@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { useLenis } from "@/components/SmoothScrollProvider";
 import {
   CollectionsAccordionMobile,
   CollectionsDropdownDesktop,
 } from "@/components/layout/CollectionsNav";
+import type { AnnouncementItem } from "@/lib/api";
 
 /**
  * MARKETPLACE & KONTAK belum punya halaman/tujuan nyata (di luar cakupan
@@ -22,7 +23,11 @@ const navLinkClass =
 const navPlaceholderClass =
   "font-jost cursor-default text-xs font-medium uppercase tracking-[0.25em] text-cream/40";
 
-export default function SiteHeader() {
+export default function SiteHeader({
+  announcementItems,
+}: {
+  announcementItems: AnnouncementItem[];
+}) {
   const { count } = useCart();
   const pathname = usePathname();
   const lenisRef = useLenis();
@@ -58,20 +63,25 @@ export default function SiteHeader() {
 
   return (
     <header ref={headerRef} className="fixed inset-x-0 top-0 z-50">
-      {/* Announcement bar */}
-      <div className="border-b border-gold/15 bg-ink-soft/90 backdrop-blur-md">
-        <p className="font-jost mx-auto max-w-6xl px-4 py-2 text-center text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-cream/50 sm:px-6 sm:text-xs sm:tracking-[0.25em]">
-          Worldwide Shipping
-          <span aria-hidden="true" className="mx-2 text-gold/40">
-            ·
-          </span>
-          Limited Production
-          <span aria-hidden="true" className="mx-2 text-gold/40">
-            ·
-          </span>
-          Authenticity Guaranteed for Every Piece
-        </p>
-      </div>
+      {/* Announcement bar — disembunyikan total kalau tidak ada item (mis. API
+          konten gagal dimuat, lihat fallback di (main)/layout.tsx), supaya yang
+          tersisa bukan strip kosong bergaris. */}
+      {announcementItems.length > 0 && (
+        <div className="border-b border-gold/15 bg-ink-soft/90 backdrop-blur-md">
+          <p className="font-jost mx-auto max-w-6xl px-4 py-2 text-center text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-cream/50 sm:px-6 sm:text-xs sm:tracking-[0.25em]">
+            {announcementItems.map((item, index) => (
+              <Fragment key={index}>
+                {index > 0 && (
+                  <span aria-hidden="true" className="mx-2 text-gold/40">
+                    ·
+                  </span>
+                )}
+                {item.text}
+              </Fragment>
+            ))}
+          </p>
+        </div>
+      )}
 
       {/* Nav utama */}
       <div className="border-b border-cream/10 bg-ink/70 backdrop-blur-md">

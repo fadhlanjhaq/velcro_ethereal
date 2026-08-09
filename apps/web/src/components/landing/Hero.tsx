@@ -3,20 +3,22 @@
 import { useRef } from "react";
 import { gsap } from "gsap";
 import { useGSAP } from "@gsap/react";
+import type { HeroContent } from "@/lib/api";
 
 gsap.registerPlugin(useGSAP);
 
 /**
  * Hero — video background full-bleed + wordmark + tagline, fade-in on load.
  *
- * Aset video: /videos/asset_video03.mp4 (landscape 1280x722, mood restoran
- * hangat — paling sinematik & "brand film" dari 4 video yang ada). Poster
- * fallback: /images/brand/hero-poster.jpg (frame bersih t=2s dari video yang
- * sama). Semua video sumber punya subtitle auto-caption yang ter-burn-in; di
- * sini di-mask dengan scrim gradient bawah + sedikit skala video. Detail &
- * rekomendasi re-encode dicatat di docs/MILESTONES.md.
+ * Teks, video, dan poster datang dari CMS (site_contents section "hero") lewat
+ * props; default lama ada di seeder: video /videos/asset_video03.mp4 (landscape
+ * 1280x722, mood restoran hangat) dengan poster /images/brand/hero-poster.jpg
+ * (frame bersih t=2s dari video yang sama). Semua video sumber punya subtitle
+ * auto-caption yang ter-burn-in; di sini di-mask dengan scrim gradient bawah +
+ * sedikit skala video. Detail & rekomendasi re-encode dicatat di
+ * docs/MILESTONES.md.
  */
-export default function Hero() {
+export default function Hero({ content }: { content: HeroContent }) {
   const root = useRef<HTMLElement>(null);
 
   useGSAP(
@@ -62,10 +64,12 @@ export default function Hero() {
         muted
         loop
         playsInline
-        poster="/images/brand/hero-poster.jpg"
+        poster={content.poster_image ?? undefined}
         aria-hidden="true"
       >
-        <source src="/videos/asset_video03.mp4" type="video/mp4" />
+        {content.video_url && (
+          <source src={content.video_url} type="video/mp4" />
+        )}
       </video>
 
       {/* Scrim: tint keseluruhan + gradient atas & bawah. Gradient bawah
@@ -82,11 +86,15 @@ export default function Hero() {
           data-hero-eyebrow
           className="mb-6 text-xs font-medium uppercase tracking-[0.4em] text-gold sm:text-sm"
         >
-          Heritage Collection — 2026
+          {content.eyebrow}
         </p>
 
         <h1 className="font-serif text-cream">
-          <span className="sr-only">Velcro Ethereal</span>
+          <span className="sr-only">
+            {[content.headline_upright, content.headline_italic]
+              .filter(Boolean)
+              .join(" ")}
+          </span>
           <span
             aria-hidden="true"
             className="flex flex-col leading-[0.9] tracking-tight"
@@ -95,13 +103,13 @@ export default function Hero() {
               data-hero-word
               className="text-6xl font-medium sm:text-8xl lg:text-[9rem]"
             >
-              Velcro
+              {content.headline_upright}
             </span>
             <span
               data-hero-word
               className="text-6xl font-light italic sm:text-8xl lg:text-[9rem]"
             >
-              Ethereal
+              {content.headline_italic}
             </span>
           </span>
         </h1>
@@ -110,7 +118,7 @@ export default function Hero() {
           data-hero-tagline
           className="mt-8 max-w-md text-balance text-base leading-relaxed text-cream/80 sm:text-lg"
         >
-          Every Creation Holds Meaning
+          {content.tagline}
         </p>
 
         {/* Scroll cue */}
@@ -119,7 +127,7 @@ export default function Hero() {
           className="mt-16 flex flex-col items-center gap-3 text-cream/60"
         >
           <span className="text-[0.65rem] uppercase tracking-[0.3em]">
-            Scroll down
+            {content.scroll_cue}
           </span>
           <span
             data-hero-cue-line

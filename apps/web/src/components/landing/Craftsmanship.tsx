@@ -5,17 +5,24 @@ import Image from "next/image";
 import { gsap } from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import type { CraftsmanshipContent } from "@/lib/api";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 /**
  * Craftsmanship — section mood/tekstur dengan parallax ringan (scrub).
- * Foto: /images/brand/asset_06.jpg (mood) + /images/product/asset_05.jpg
- * (tekstur rajut, detail craftsmanship). Parallax dinonaktifkan otomatis saat
- * reduced-motion (gambar tetap tampil statis, tidak disembunyikan).
+ * Foto dan kecepatan parallax-nya datang dari CMS (site_content_items group
+ * "craftsmanship_images"): images[0] = foto mood kolom besar, images[1] = inset
+ * tekstur. Parallax dinonaktifkan otomatis saat reduced-motion (gambar tetap
+ * tampil statis, tidak disembunyikan).
  */
-export default function Craftsmanship() {
+export default function Craftsmanship({
+  content,
+}: {
+  content: CraftsmanshipContent;
+}) {
   const root = useRef<HTMLElement>(null);
+  const [moodImage, textureImage] = content.images;
 
   useGSAP(
     () => {
@@ -69,14 +76,19 @@ export default function Craftsmanship() {
       <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-2 lg:gap-20">
         {/* Kolom foto mood — parallax */}
         <div className="relative aspect-[4/5] overflow-hidden rounded-sm">
-          <div data-parallax="7" className="absolute -inset-y-[12%] inset-x-0">
-            <Image
-              src="/images/brand/asset_06.jpg"
-              alt="Suasana koleksi Velcro Ethereal"
-              fill
-              sizes="(max-width: 1024px) 100vw, 50vw"
-              className="object-cover"
-            />
+          <div
+            data-parallax={moodImage?.parallax_speed ?? undefined}
+            className="absolute -inset-y-[12%] inset-x-0"
+          >
+            {moodImage?.url && (
+              <Image
+                src={moodImage.url}
+                alt="Suasana koleksi Velcro Ethereal"
+                fill
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="object-cover"
+              />
+            )}
           </div>
           <div
             className="absolute inset-0 bg-ink/20"
@@ -90,22 +102,20 @@ export default function Craftsmanship() {
             data-craft-reveal
             className="mb-6 text-xs font-medium uppercase tracking-[0.4em] text-gold"
           >
-            Craftsmanship
+            {content.eyebrow}
           </p>
           <h2
             id="craft-heading"
             data-craft-reveal
             className="font-serif text-4xl font-light italic leading-tight text-cream sm:text-5xl"
           >
-            Ditenun perlahan, dijahit untuk bertahan.
+            {content.heading}
           </h2>
           <p
             data-craft-reveal
             className="mt-6 max-w-md text-base leading-relaxed text-cream/70"
           >
-            Setiap potong melewati tangan pengrajin — dari benang yang dipilih,
-            simpul yang diikat, hingga bordir yang menutup cerita. Bukan produksi
-            massal, melainkan waktu yang dijahitkan ke dalam kain.
+            {content.body}
           </p>
 
           {/* Inset tekstur close-up — parallax lebih halus */}
@@ -114,16 +124,18 @@ export default function Craftsmanship() {
             className="relative mt-10 aspect-[16/10] max-w-sm overflow-hidden rounded-sm"
           >
             <div
-              data-parallax="4"
+              data-parallax={textureImage?.parallax_speed ?? undefined}
               className="absolute -inset-y-[10%] inset-x-0"
             >
-              <Image
-                src="/images/product/asset_05.jpg"
-                alt="Detail tekstur rajut"
-                fill
-                sizes="(max-width: 1024px) 100vw, 24rem"
-                className="object-cover"
-              />
+              {textureImage?.url && (
+                <Image
+                  src={textureImage.url}
+                  alt="Detail tekstur rajut"
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 24rem"
+                  className="object-cover"
+                />
+              )}
             </div>
           </div>
         </div>

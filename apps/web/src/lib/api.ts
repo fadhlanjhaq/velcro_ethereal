@@ -6,6 +6,7 @@
  * hanya bertahan sebagai referensi bentuk data. Bentuk payload API (App\Http\
  * Resources\* di apps/api) sudah dibuat PERSIS sama dengan interface ini.
  */
+import { cache } from "react";
 import type {
   MockCategory,
   MockProduct,
@@ -17,6 +18,76 @@ export type Category = MockCategory;
 export type ProductImage = MockProductImage;
 export type ProductVariant = MockProductVariant;
 export type Product = MockProduct;
+
+/**
+ * Konten landing page yang dikelola lewat admin panel (tabel site_contents +
+ * site_content_items di apps/api). Berbeda dari tipe produk di atas, bentuk ini
+ * tidak punya padanan di mock-products.ts — kontraknya didefinisikan langsung di
+ * sini dan mengikuti App\Http\Resources\SiteContentResource.
+ *
+ * Field bernilai `null` kalau admin belum mengisinya: resource di backend selalu
+ * mengirim seluruh key (repeater jadi array kosong), jadi bentuk payload tetap
+ * sama dan konsumen tidak perlu menjaga keberadaan key.
+ */
+export interface AnnouncementItem {
+  text: string | null;
+}
+
+export interface AnnouncementBarContent {
+  items: AnnouncementItem[];
+}
+
+export interface HeroContent {
+  eyebrow: string | null;
+  headline_upright: string | null;
+  headline_italic: string | null;
+  tagline: string | null;
+  scroll_cue: string | null;
+  video_url: string | null;
+  poster_image: string | null;
+}
+
+export interface BrandStoryPillar {
+  title: string | null;
+  body: string | null;
+}
+
+export interface BrandStoryContent {
+  eyebrow: string | null;
+  heading: string | null;
+  /** Nomor urut ("01", "02", ...) di-derive dari urutan array ini saat render. */
+  pillars: BrandStoryPillar[];
+}
+
+export interface CraftsmanshipImage {
+  url: string | null;
+  /** Nilai untuk atribut data-parallax; null → dipakai default di komponen. */
+  parallax_speed: number | null;
+  role: string | null;
+}
+
+export interface CraftsmanshipContent {
+  eyebrow: string | null;
+  heading: string | null;
+  body: string | null;
+  images: CraftsmanshipImage[];
+}
+
+export interface ClosingCtaContent {
+  eyebrow: string | null;
+  heading: string | null;
+  secondary_line: string | null;
+  cta_label: string | null;
+  cta_href: string | null;
+}
+
+export interface SiteContent {
+  announcement_bar: AnnouncementBarContent;
+  hero: HeroContent;
+  brand_story: BrandStoryContent;
+  craftsmanship: CraftsmanshipContent;
+  closing_cta: ClosingCtaContent;
+}
 
 // URL Laravel lokal (Herd). Sama dengan target rewrites di next.config.ts,
 // bisa di-override via env untuk Docker/production.
@@ -72,6 +143,31 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
   const json = (await res.json()) as Envelope<Product>;
   return json.data;
 }
+
+/**
+ * Konten seluruh section landing page.
+ *
+ * Dibungkus `cache()` React karena dipanggil dua kali dalam satu request —
+ * (main)/layout.tsx untuk announcement bar di SiteHeader, dan (main)/page.tsx
+ * untuk section landing. Keduanya dirender dalam satu render pass, jadi
+ * memoization ini membuatnya cukup satu HTTP call.
+ *
+ * revalidate 60 (bukan no-store seperti katalog produk): konten ini jarang
+ * berubah — hanya saat admin menyuntingnya lewat panel — jadi tidak perlu
+ * round-trip ke Laravel di setiap page view.
+ */
+export const getSiteContent = cache(async (): Promise<SiteContent> => {
+  const res = await fetch(apiUrl("/api/site-content"), {
+    next: { revalidate: 60 },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Gagal memuat konten situs (HTTP ${res.status}).`);
+  }
+
+  const json = (await res.json()) as Envelope<SiteContent>;
+  return json.data;
+});
 
 /**
  * Format harga (string decimal dari API, mis. "850000.00") → Rupiah

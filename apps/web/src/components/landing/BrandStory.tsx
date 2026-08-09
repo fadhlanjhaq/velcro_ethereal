@@ -5,6 +5,7 @@ import { gsap } from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
+import type { BrandStoryContent } from "@/lib/api";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger, SplitText);
 
@@ -27,27 +28,15 @@ gsap.registerPlugin(useGSAP, ScrollTrigger, SplitText);
  *     adalah headline yang slide TANPA mask (efeknya samar) dan card yang minim
  *     depth. Di bawah: masked reveal per kata + card scale-in + hover.
  *
- * NB: copy pilar masih placeholder (asumsi dari brand DNA), pending konfirmasi.
+ * NB: copy pilar sekarang dikelola lewat CMS (site_content_items group "pillars")
+ * dan masuk lewat props; nomor urut ("01", "02", ...) di-derive dari urutan
+ * array, bukan disimpan sebagai field.
  */
-const PILLARS = [
-  {
-    index: "01",
-    title: "Heritage",
-    body: "Setiap simpul bordir membawa cerita — motif yang diwariskan turun-temurun, bukan sekadar hiasan permukaan.",
-  },
-  {
-    index: "02",
-    title: "Artisan",
-    body: "Dikerjakan dengan tangan oleh para pengrajin. Waktu dan ketelitian, bukan mesin, yang menentukan mutunya.",
-  },
-  {
-    index: "03",
-    title: "Eternal",
-    body: "Dibuat untuk melampaui tren. Pakaian yang menua dengan anggun dan tetap relevan lintas musim.",
-  },
-];
-
-export default function BrandStory() {
+export default function BrandStory({
+  content,
+}: {
+  content: BrandStoryContent;
+}) {
   const root = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
@@ -109,23 +98,23 @@ export default function BrandStory() {
     >
       <div className="mx-auto max-w-6xl">
         <p className="mb-6 text-xs font-medium uppercase tracking-[0.4em] text-gold">
-          Filosofi
+          {content.eyebrow}
         </p>
         <h2
           id="brandstory-heading"
           ref={heading}
           className="max-w-3xl font-serif text-4xl font-light italic leading-tight text-cream sm:text-6xl"
         >
-          Tiga prinsip yang menjahit setiap helai.
+          {content.heading}
         </h2>
 
         <div
           data-pillar-grid
           className="mt-20 grid gap-px overflow-hidden rounded-sm border border-gold/15 bg-gold/15 sm:grid-cols-3"
         >
-          {PILLARS.map((pillar) => (
+          {content.pillars.map((pillar, index) => (
             <article
-              key={pillar.title}
+              key={index}
               data-pillar
               className="group relative flex flex-col gap-5 bg-ink p-8 transition-colors duration-500 hover:bg-ink-soft sm:p-10"
             >
@@ -136,7 +125,7 @@ export default function BrandStory() {
                 className="absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-gold transition-transform duration-500 ease-out group-hover:scale-x-100"
               />
               <span className="font-serif text-sm text-gold transition-colors duration-500 group-hover:text-gold/90">
-                {pillar.index}
+                {String(index + 1).padStart(2, "0")}
               </span>
               <h3 className="font-serif text-3xl font-medium text-cream transition-transform duration-500 ease-out group-hover:translate-x-1">
                 {pillar.title}
