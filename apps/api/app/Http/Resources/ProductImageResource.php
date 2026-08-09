@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\ResolvesStorageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -10,13 +11,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class ProductImageResource extends JsonResource
 {
+    use ResolvesStorageUrl;
+
     /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
         return [
-            'url' => $this->url,
+            'url' => $this->resolveStorageUrl($this->url),
             'sort_order' => $this->sort_order,
         ];
     }
