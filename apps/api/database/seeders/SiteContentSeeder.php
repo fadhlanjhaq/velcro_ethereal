@@ -25,6 +25,7 @@ class SiteContentSeeder extends Seeder
     {
         $this->seedContents();
         $this->seedItems();
+        $this->seedContactSection();
     }
 
     private function seedContents(): void
@@ -107,6 +108,66 @@ class SiteContentSeeder extends Seeder
                     'data' => $data,
                 ]);
             }
+        }
+    }
+
+    /**
+     * Section "contact" — data kontak & social link.
+     *
+     * BEDA PERLAKUAN dari section di atas: di sini seeder hanya MENYIAPKAN
+     * baris kosongnya, tidak pernah menimpa isi yang sudah ada. Section landing
+     * di atas isinya copy final yang memang bersumber dari seeder, jadi wajar
+     * di-reset saat re-seed. Sebaliknya alamat/email/telepon justru diisi admin
+     * lewat panel — kalau pakai updateOrCreate seperti di atas, sekali seeder
+     * dijalankan lagi (mis. ikut `db:seed` setelah menambah seeder lain) semua
+     * isian itu balik jadi null tanpa peringatan.
+     */
+    private function seedContactSection(): void
+    {
+        $contents = [
+            // [key, value default, type] — value null = menunggu diisi admin.
+            ['address', null, 'richtext'],
+            ['email', null, 'text'],
+            ['phone', null, 'text'],
+            // Nomor disimpan polos (bukan URL wa.me utuh) supaya URL-nya bisa
+            // dirakit ulang dengan pesan berbeda per konteks pemakaian.
+            ['whatsapp_number', '628131453336', 'text'],
+            ['whatsapp_message', 'Halo, saya tertarik dengan produk Velcro Ethereal', 'text'],
+            ['maps_url', null, 'url'],
+        ];
+
+        foreach ($contents as [$key, $value, $type]) {
+            SiteContent::firstOrCreate(
+                ['section' => 'contact', 'key' => $key],
+                ['value' => $value, 'type' => $type],
+            );
+        }
+
+        // Sama seperti field skalar di atas: hanya diisi kalau grupnya memang
+        // masih kosong, supaya tambah/hapus/reorder link oleh admin tidak
+        // terhapus saat seeder dijalankan ulang.
+        $hasSocialLinks = SiteContentItem::where('section', 'contact')
+            ->where('group_key', 'social_links')
+            ->exists();
+
+        if ($hasSocialLinks) {
+            return;
+        }
+
+        $socialLinks = [
+            ['platform' => 'whatsapp', 'label' => 'Hubungi via WhatsApp', 'url' => 'https://wa.me/628131453336'],
+            ['platform' => 'instagram', 'label' => '@velcroethereal', 'url' => 'https://www.instagram.com/velcroethereal'],
+            ['platform' => 'shopee', 'label' => 'Belanja di Shopee', 'url' => 'https://id.shp.ee/PF2SRdhu'],
+            ['platform' => 'tiktok', 'label' => 'Ikuti di TikTok', 'url' => 'https://www.tiktok.com/@velcroethereal'],
+        ];
+
+        foreach ($socialLinks as $sortOrder => $data) {
+            SiteContentItem::create([
+                'section' => 'contact',
+                'group_key' => 'social_links',
+                'sort_order' => $sortOrder,
+                'data' => $data,
+            ]);
         }
     }
 }

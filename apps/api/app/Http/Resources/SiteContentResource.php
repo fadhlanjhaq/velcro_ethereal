@@ -88,6 +88,25 @@ class SiteContentResource extends JsonResource
                 'cta_label' => $this->value('closing_cta', 'cta_label'),
                 'cta_href' => $this->value('closing_cta', 'cta_href'),
             ],
+
+            'contact' => [
+                'address' => $this->value('contact', 'address'),
+                'email' => $this->value('contact', 'email'),
+                'phone' => $this->value('contact', 'phone'),
+                // Nomor polos (mis. "628131453336"); URL wa.me dirakit di
+                // frontend agar pesan awalnya bisa beda per konteks.
+                'whatsapp_number' => $this->value('contact', 'whatsapp_number'),
+                'whatsapp_message' => $this->value('contact', 'whatsapp_message'),
+                'maps_url' => $this->value('contact', 'maps_url'),
+                'social_links' => array_map(
+                    fn (array $item): array => [
+                        'platform' => $item['platform'] ?? null,
+                        'label' => $item['label'] ?? null,
+                        'url' => $item['url'] ?? null,
+                    ],
+                    $this->items('contact', 'social_links'),
+                ),
+            ],
         ];
     }
 

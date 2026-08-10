@@ -77,6 +77,14 @@ class ManageSiteContent extends Page
             'cta_label' => 'text',
             'cta_href' => 'url',
         ],
+        'contact' => [
+            'address' => 'richtext',
+            'email' => 'text',
+            'phone' => 'text',
+            'whatsapp_number' => 'text',
+            'whatsapp_message' => 'text',
+            'maps_url' => 'url',
+        ],
     ];
 
     /**
@@ -88,6 +96,21 @@ class ManageSiteContent extends Page
         'announcement_bar.items' => ['announcement_bar', 'announcement_items'],
         'brand_story.pillars' => ['brand_story', 'pillars'],
         'craftsmanship.images' => ['craftsmanship', 'craftsmanship_images'],
+        'contact.social_links' => ['contact', 'social_links'],
+    ];
+
+    /**
+     * Platform social link yang didukung. Sengaja daftar tertutup: ikonnya
+     * dipetakan manual per platform di frontend, jadi nilai di luar daftar ini
+     * akan tampil tanpa ikon.
+     *
+     * @var array<string, string>
+     */
+    private const SOCIAL_PLATFORMS = [
+        'instagram' => 'Instagram',
+        'whatsapp' => 'WhatsApp',
+        'shopee' => 'Shopee',
+        'tiktok' => 'TikTok',
     ];
 
     /**
@@ -140,6 +163,7 @@ class ManageSiteContent extends Page
                         $this->brandStoryTab(),
                         $this->craftsmanshipTab(),
                         $this->closingCtaTab(),
+                        $this->contactTab(),
                     ])
                     ->columnSpanFull(),
             ])
@@ -329,6 +353,67 @@ class ManageSiteContent extends Page
                     ->validationMessages([
                         'regex' => 'Harus berupa path internal (mis. /shop) atau URL lengkap (https://...).',
                     ]),
+            ]);
+    }
+
+    private function contactTab(): Tab
+    {
+        return Tab::make('Kontak')
+            ->schema([
+                Textarea::make('contact.address')
+                    ->label('Alamat')
+                    ->rows(3)
+                    ->columnSpanFull(),
+                TextInput::make('contact.email')
+                    ->label('Email')
+                    ->email()
+                    ->maxLength(255),
+                TextInput::make('contact.phone')
+                    ->label('Telepon')
+                    ->tel()
+                    ->maxLength(255),
+                TextInput::make('contact.whatsapp_number')
+                    ->label('Nomor WhatsApp')
+                    ->maxLength(20)
+                    // Format internasional tanpa "+" atau spasi, mis.
+                    // 628131453336 — dipakai merakit URL wa.me di frontend.
+                    ->rule('regex:/^[0-9]+$/')
+                    ->validationMessages([
+                        'regex' => 'Hanya angka, format internasional tanpa "+" (mis. 628131453336).',
+                    ])
+                    ->helperText('Hanya angka, diawali kode negara. Kosongkan untuk menyembunyikan tombol WhatsApp melayang.'),
+                TextInput::make('contact.maps_url')
+                    ->label('Link Google Maps')
+                    ->url()
+                    ->maxLength(255),
+                Textarea::make('contact.whatsapp_message')
+                    ->label('Pesan awal WhatsApp')
+                    ->rows(2)
+                    ->helperText('Terisi otomatis di chat saat pengunjung menekan tombol WhatsApp.')
+                    ->columnSpanFull(),
+                Repeater::make('contact.social_links')
+                    ->label('Social link')
+                    ->schema([
+                        Select::make('platform')
+                            ->label('Platform')
+                            ->options(self::SOCIAL_PLATFORMS)
+                            ->required(),
+                        TextInput::make('label')
+                            ->label('Label')
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('url')
+                            ->label('URL')
+                            ->url()
+                            ->required()
+                            ->maxLength(255)
+                            ->columnSpanFull(),
+                    ])
+                    ->reorderable()
+                    ->collapsible()
+                    ->itemLabel(fn (array $state): ?string => $state['label'] ?? null)
+                    ->addActionLabel('Tambah social link')
+                    ->columnSpanFull(),
             ]);
     }
 
