@@ -1,25 +1,43 @@
 import SmoothScrollProvider from "@/components/SmoothScrollProvider";
 import SiteHeader from "@/components/layout/SiteHeader";
 import SiteFooter from "@/components/layout/SiteFooter";
+import WhatsAppFloatingButton from "@/components/layout/WhatsAppFloatingButton";
 import { CartProvider } from "@/context/CartContext";
-import { getSiteContent, type AnnouncementItem } from "@/lib/api";
+import {
+  buildWhatsAppUrl,
+  getSiteContent,
+  type AnnouncementItem,
+} from "@/lib/api";
+
+type ChromeContent = {
+  announcementItems: AnnouncementItem[];
+  whatsappUrl: string | null;
+};
 
 /**
- * Announcement bar itu elemen pelengkap, bukan konten utama — halaman seperti
- * /cart dan /checkout harus tetap bisa dipakai walau API konten sedang mati.
- * Karena itu kegagalan di-serap DI SINI, bukan di getSiteContent() (yang tetap
- * melempar Error untuk konsumen yang memang bergantung penuh padanya, mis.
- * homepage: Hero/BrandStory/dst adalah isi halamannya).
+ * Announcement bar dan tombol WhatsApp melayang itu elemen pelengkap, bukan
+ * konten utama — halaman seperti /cart dan /checkout harus tetap bisa dipakai
+ * walau API konten sedang mati. Karena itu kegagalan di-serap DI SINI, bukan di
+ * getSiteContent() (yang tetap melempar Error untuk konsumen yang memang
+ * bergantung penuh padanya, mis. homepage: Hero/BrandStory/dst adalah isi
+ * halamannya).
  */
-async function getAnnouncementItems(): Promise<AnnouncementItem[]> {
+async function getChromeContent(): Promise<ChromeContent> {
   try {
-    const { announcement_bar } = await getSiteContent();
-    return announcement_bar.items;
+    const { announcement_bar, contact } = await getSiteContent();
+
+    return {
+      announcementItems: announcement_bar.items,
+      whatsappUrl: buildWhatsAppUrl(
+        contact.whatsapp_number,
+        contact.whatsapp_message,
+      ),
+    };
   } catch (error) {
     // Tetap terlihat di log server (dev maupun production) tanpa menyeret
     // seluruh route group ke error boundary.
-    console.error("Gagal memuat announcement bar:", error);
-    return [];
+    console.error("Gagal memuat konten chrome situs:", error);
+    return { announcementItems: [], whatsappUrl: null };
   }
 }
 
@@ -43,7 +61,7 @@ export default async function MainLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const announcementItems = await getAnnouncementItems();
+  const { announcementItems, whatsappUrl } = await getChromeContent();
 
   return (
     <SmoothScrollProvider>
@@ -51,6 +69,8 @@ export default async function MainLayout({
         <SiteHeader announcementItems={announcementItems} />
         {children}
         <SiteFooter />
+        {/* Disembunyikan total kalau nomor WhatsApp belum diisi admin. */}
+        {whatsappUrl && <WhatsAppFloatingButton href={whatsappUrl} />}
       </CartProvider>
     </SmoothScrollProvider>
   );

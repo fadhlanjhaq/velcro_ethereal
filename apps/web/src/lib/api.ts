@@ -81,12 +81,53 @@ export interface ClosingCtaContent {
   cta_href: string | null;
 }
 
+/** Platform yang ikonnya dipetakan di frontend (lihat /kontak). */
+export type SocialPlatform = "instagram" | "whatsapp" | "shopee" | "tiktok";
+
+export interface SocialLink {
+  /** Longgar (string), bukan SocialPlatform: nilainya berasal dari database
+   *  sehingga platform tak dikenal harus tetap bisa dirender tanpa ikon. */
+  platform: string | null;
+  label: string | null;
+  url: string | null;
+}
+
+export interface ContactContent {
+  address: string | null;
+  email: string | null;
+  phone: string | null;
+  /** Nomor polos tanpa "+", mis. "628131453336" — URL wa.me dirakit di
+   *  konsumen supaya pesan awalnya bisa beda per konteks. */
+  whatsapp_number: string | null;
+  whatsapp_message: string | null;
+  maps_url: string | null;
+  social_links: SocialLink[];
+}
+
 export interface SiteContent {
   announcement_bar: AnnouncementBarContent;
   hero: HeroContent;
   brand_story: BrandStoryContent;
   craftsmanship: CraftsmanshipContent;
   closing_cta: ClosingCtaContent;
+  contact: ContactContent;
+}
+
+/**
+ * Rakit URL wa.me dari nomor + pesan awal. Mengembalikan null kalau nomornya
+ * belum diisi admin, supaya pemanggil bisa menyembunyikan tombolnya.
+ */
+export function buildWhatsAppUrl(
+  number: string | null,
+  message: string | null,
+): string | null {
+  const digits = number?.replace(/\D/g, "");
+  if (!digits) return null;
+
+  const base = `https://wa.me/${digits}`;
+  return message
+    ? `${base}?text=${encodeURIComponent(message)}`
+    : base;
 }
 
 // URL Laravel lokal (Herd). Sama dengan target rewrites di next.config.ts,
