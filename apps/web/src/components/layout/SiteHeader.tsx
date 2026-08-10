@@ -11,17 +11,8 @@ import {
 } from "@/components/layout/CollectionsNav";
 import type { AnnouncementItem } from "@/lib/api";
 
-/**
- * MARKETPLACE & KONTAK belum punya halaman/tujuan nyata (di luar cakupan
- * milestone ini) — sengaja dibuat non-navigasi (bukan href="#" polos yang
- * melompat ke atas halaman) daripada broken link atau dead anchor jump.
- */
-const PLACEHOLDER_NAV_ITEMS = ["Marketplace", "Kontak"] as const;
-
 const navLinkClass =
   "font-jost text-xs font-medium uppercase tracking-[0.25em] text-cream/80 transition-colors hover:text-gold";
-const navPlaceholderClass =
-  "font-jost cursor-default text-xs font-medium uppercase tracking-[0.25em] text-cream/40";
 
 export default function SiteHeader({
   announcementItems,
@@ -93,78 +84,79 @@ export default function SiteHeader({
             Velcro&nbsp;Ethereal
           </Link>
 
-          <nav className="hidden items-center gap-8 lg:flex">
-            <CollectionsDropdownDesktop
-              triggerClassName={navLinkClass}
-              onSectionLink={handleSectionLink}
-            />
-            {PLACEHOLDER_NAV_ITEMS.map((label) => (
-              <a
-                key={label}
-                href="#"
-                onClick={(event) => event.preventDefault()}
-                aria-disabled="true"
-                title="Segera hadir"
-                className={navPlaceholderClass}
-              >
-                {label}
-              </a>
-            ))}
-          </nav>
+          {/* Nav + aksi digabung jadi satu grup kanan. Sebelumnya keduanya
+              anak terpisah dari justify-between, sehingga sisa ruang terbagi
+              rata jadi dua celah lebar — yang membuat ikon keranjang terlihat
+              menggantung jauh dari "Kontak". Digabung begini, ruang kosongnya
+              terkumpul di satu tempat (antara logo dan nav) dan terbaca
+              disengaja. Di bawah lg nav ber-display:none sehingga bukan flex
+              item — gap di wrapper tidak berlaku dan layout mobile persis
+              seperti sebelumnya. */}
+          <div className="flex items-center gap-10">
+            <nav className="hidden items-center gap-8 lg:flex">
+              <CollectionsDropdownDesktop
+                triggerClassName={navLinkClass}
+                onSectionLink={handleSectionLink}
+              />
+              <Link href="/kontak" className={navLinkClass}>
+                Kontak
+              </Link>
+            </nav>
 
-          <div className="flex items-center gap-3">
-            <Link
-              href="/cart"
-              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-gold/40 text-cream transition-colors hover:border-gold hover:text-gold"
-              aria-label={`Keranjang${count > 0 ? `, ${count} item` : ""}`}
-            >
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            <div className="flex items-center gap-3">
+              <Link
+                href="/cart"
+                className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-gold/40 text-cream transition-colors hover:border-gold hover:text-gold"
+                aria-label={`Keranjang${count > 0 ? `, ${count} item` : ""}`}
               >
-                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-                <path d="M3 6h18" />
-                <path d="M16 10a4 4 0 0 1-8 0" />
-              </svg>
-              {count > 0 && (
-                <span className="font-jost absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[0.6rem] font-semibold text-ink">
-                  {count}
-                </span>
-              )}
-            </Link>
-
-            <button
-              type="button"
-              onClick={() => setMobileOpen((open) => !open)}
-              aria-expanded={mobileOpen}
-              aria-label={mobileOpen ? "Tutup menu" : "Buka menu"}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-cream/20 text-cream transition-colors hover:border-gold hover:text-gold lg:hidden"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                {mobileOpen ? (
-                  <path d="M18 6 6 18M6 6l12 12" />
-                ) : (
-                  <path d="M3 6h18M3 12h18M3 18h18" />
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                  <path d="M3 6h18" />
+                  <path d="M16 10a4 4 0 0 1-8 0" />
+                </svg>
+                {count > 0 && (
+                  <span className="font-jost absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[0.6rem] font-semibold text-ink">
+                    {count}
+                  </span>
                 )}
-              </svg>
-            </button>
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setMobileOpen((open) => !open)}
+                aria-expanded={mobileOpen}
+                aria-label={mobileOpen ? "Tutup menu" : "Buka menu"}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-cream/20 text-cream transition-colors hover:border-gold hover:text-gold lg:hidden"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  {mobileOpen ? (
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  ) : (
+                    <path d="M3 6h18M3 12h18M3 18h18" />
+                  )}
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -175,18 +167,13 @@ export default function SiteHeader({
               triggerClassName={`${navLinkClass} py-3`}
               onSectionLink={handleSectionLink}
             />
-            {PLACEHOLDER_NAV_ITEMS.map((label) => (
-              <a
-                key={label}
-                href="#"
-                onClick={(event) => event.preventDefault()}
-                aria-disabled="true"
-                title="Segera hadir"
-                className={`${navPlaceholderClass} py-3`}
-              >
-                {label}
-              </a>
-            ))}
+            <Link
+              href="/kontak"
+              onClick={() => setMobileOpen(false)}
+              className={`${navLinkClass} py-3`}
+            >
+              Kontak
+            </Link>
           </nav>
         )}
       </div>
