@@ -15,16 +15,21 @@ const nextConfig: NextConfig = {
   // Laravel storage (lihat ProductImageResource::resolveUrl di apps/api —
   // foto hasil upload Filament di-serve dari situ, bukan aset statis Next.js).
   //
-  // Domain production (VPS/domain asli Velcro Ethereal) BELUM final — nginx
-  // config di docker/nginx/nginx.conf masih pakai `server_name _;` (catch-all)
-  // dan tidak ada domain riil tercatat di manapun di repo ini. Pattern kedua
-  // (https) perlu ditambahkan terpisah begitu domain production sudah fix,
-  // supaya next/image tidak menolak load gambar di production nanti.
+  // Dua host, satu per environment: domain Herd untuk dev, dan domain
+  // production. Keduanya hanya membuka path /storage/** karena semua URL yang
+  // dihasilkan resolveStorageUrl() berbentuk `{APP_URL}/storage/{path}`.
+  // `www` tidak perlu didaftarkan — APP_URL di server memakai apex, jadi URL
+  // yang di-generate Laravel selalu apex.
   images: {
     remotePatterns: [
       {
         protocol: "http",
         hostname: "velcro-api.test",
+        pathname: "/storage/**",
+      },
+      {
+        protocol: "https",
+        hostname: "velcroethereal.com",
         pathname: "/storage/**",
       },
     ],
