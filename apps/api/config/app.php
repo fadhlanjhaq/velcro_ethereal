@@ -56,6 +56,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Admin Email
+    |--------------------------------------------------------------------------
+    |
+    | Satu-satunya email yang boleh masuk panel Filament (lihat
+    | User::canAccessPanel). Sengaja lewat env, bukan hardcode: alamatnya tidak
+    | ikut ter-commit, dan menggantinya cukup dengan mengubah .env lalu
+    | `config:clear` — tanpa perlu build ulang image.
+    |
+    | Dibiarkan null kalau tidak diset, dan itu menutup akses untuk semua orang
+    | (fail closed) karena tidak ada email user yang bisa cocok dengan null.
+    |
+    */
+
+    'admin_email' => env('ADMIN_EMAIL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |
