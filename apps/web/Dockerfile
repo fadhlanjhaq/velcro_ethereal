@@ -32,6 +32,18 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Production gate (see src/proxy.ts): while this is not "true", every (main)
+# route redirects to /coming-soon. Next.js inlines NEXT_PUBLIC_* at compile time
+# via webpack's DefinePlugin, so the value has to be present as an ENV *before*
+# `npm run build` — it cannot be corrected later from the runtime environment
+# the way LARAVEL_API_URL can. Declared inside this stage deliberately: an ARG
+# placed before the first FROM is global and would not be visible here. Defaults
+# to false so a build without --build-arg stays gated instead of going live by
+# accident.
+ARG NEXT_PUBLIC_SITE_LIVE=false
+ENV NEXT_PUBLIC_SITE_LIVE=$NEXT_PUBLIC_SITE_LIVE
+
 # Requires `output: 'standalone'` in next.config.ts (produces .next/standalone).
 RUN npm run build
 
