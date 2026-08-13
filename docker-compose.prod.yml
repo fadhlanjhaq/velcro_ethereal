@@ -1,0 +1,93 @@
+# =============================================================================
+# Velcro Ethereal — production override (VPS)
+#
+# This file is NEVER used on its own. It layers on top of docker-compose.yml,
+# which stays exactly as it is: the local pre-deploy validation stack that
+# builds both images from source.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# What this override changes, and why:
+#
+#   1. web / api pull PREBUILT images from GHCR instead of building on the box.
+#      The VPS has 957 Mi RAM and 2 cores; `npm run build` for Next.js there is
+#      a reliable way to get OOM-killed. Images are built elsewhere (CI) and
+#      only pulled here.
+#
+#   2. mem_limit on every service. Previously these lived ONLY as uncommitted
+#      edits in the VPS working tree, so any `git checkout`/`reset` silently
+#      removed them — and without them MySQL 8 tends to exhaust the 957 Mi box.
+#      Ceilings total 780 m, leaving headroom for the host (nginx, sshd, dockerd).
+#
+#   3. db gets docker/mysql/my.cnf mounted read-only — the same low-footprint
+#      InnoDB tuning, also previously untracked on the server.
+#
+#   4. A storage_public volume shared by api (rw) and proxy (ro), so uploaded
+#      media survives a container recreate AND so the public/storage symlink
+#      resolves on the proxy side. Still requires `artisan storage:link` to be
+#      run once inside the api container.
+#
+# `build: !reset null` removes the `build:` key inherited from the base file.
+# Without it Compose sees build + image together and rebuilds from source,
+# tagging the result with the GHCR name — exactly what we're avoiding here.
+# Requires Compose >= 2.24 (VPS runs v5.3.1). On an older Compose, drop the
+# !reset lines and use `up -d --no-build` after an explicit `pull` instead.
+#
+# Images must exist in GHCR before this is used:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+# =============================================================================
+
+services:
+  # Prebuilt from apps/web/Dockerfile (standalone Next.js server).
+  web:
+    build: !reset null
+    image: ghcr.io/fadhlanjhaq/velcro-ethereal-web:latest
+    mem_limit: 200m
+    # Server Components reach Laravel through the proxy container, never through
+    # `api` directly: api runs php-fpm, which speaks FastCGI rather than HTTP, so
+    # http://api:9000 cannot answer a fetch(). The proxy already routes /api to
+    # it, giving SSR the exact same path as a public request. Read at runtime by
+    # server.js, which is why it belongs here rather than in the image — unlike
+    # NEXT_PUBLIC_SITE_LIVE, which is inlined at build time.
+    environment:
+      LARAVEL_API_URL: http://proxy
+
+  # Prebuilt from apps/api/Dockerfile (Laravel on php-fpm).
+  api:
+    build: !reset null
+    image: ghcr.io/fadhlanjhaq/velcro-ethereal-api:latest
+    mem_limit: 200m
+    # Media uploaded through Filament (all FileUpload fields target the 'public'
+    # disk, which is rooted at storage/app/public). Writable here, read-only on
+    # the proxy. Added on top of the public_assets mount from the base file.
+    volumes:
+      - storage_public:/var/www/html/storage/app/public
+
+  db:
+    mem_limit: 300m
+    # Only the additional mount is listed — Compose merges this with the
+    # db_data volume declared in the base file rather than replacing it.
+    volumes:
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+
+  redis:
+    mem_limit: 50m
+
+  # Stays on the stock nginx:alpine image from the base file (no custom build);
+  # it needs the memory ceiling and read access to the uploaded media.
+  proxy:
+    mem_limit: 30m
+    # `artisan storage:link` makes public/storage point at the absolute path
+    # /var/www/html/storage/app/public. nginx resolves that symlink inside its
+    # OWN filesystem, so without this mount the link dangles here and every
+    # /storage/* request falls through to Next.js as a 404. Read-only: nginx
+    # only ever serves these files.
+    volumes:
+      - storage_public:/var/www/html/storage/app/public:ro
+
+volumes:
+  # Shared between api (writer) and proxy (reader). Declared here rather than in
+  # the base file because only the production stack serves uploaded media;
+  # db_data and public_assets stay defined in docker-compose.yml and are merged
+  # in alongside this one.
+  storage_public:
