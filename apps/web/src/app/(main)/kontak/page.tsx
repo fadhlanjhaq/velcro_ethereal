@@ -10,6 +10,21 @@ export const metadata: Metadata = {
 };
 
 /**
+ * Halaman ini bergantung penuh pada getSiteContent(), yang memakai
+ * `revalidate: 60` — bukan `no-store` seperti getProducts(). Tanpa penanda ini
+ * Next.js memperlakukan /kontak sebagai kandidat prerender saat `next build`,
+ * artinya fetch sungguhan ke Laravel dari runner CI, di mana service `proxy`
+ * tidak ada — dan build gagal di tahap prerender. Route lain aman: yang
+ * memanggil getProducts() sudah dinamis karena `no-store`, dan (main)/layout.tsx
+ * menyerap kegagalan getSiteContent() sendiri.
+ *
+ * `dynamic` masih API yang berlaku di Next 16 selama Cache Components tidak
+ * dinyalakan (next.config.ts tidak menyetel `cacheComponents`) — lihat
+ * node_modules/next/dist/docs/01-app/02-guides/caching-without-cache-components.md.
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * /kontak — Server Component. Seluruh isinya dikelola lewat panel admin
  * (site_contents section "contact"), jadi tidak ada kontak yang hardcode di
  * sini. Field yang belum diisi admin (alamat/email/telepon bisa null) otomatis
