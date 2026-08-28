@@ -210,6 +210,56 @@ export const getSiteContent = cache(async (): Promise<SiteContent> => {
   return json.data;
 });
 
+/** Payload yang dikirim ke POST /api/orders (lihat App\Http\Requests\StoreOrderRequest). */
+export interface CreateOrderPayload {
+  guest_name: string;
+  guest_email: string;
+  phone: string;
+  address: string;
+  items: { product_variant_id: number; quantity: number }[];
+}
+
+/** Bentuk data yang dikembalikan POST /api/orders saat sukses (envelope `{ data }`). */
+export interface CreatedOrder {
+  order_number: string;
+  snap_token: string;
+  gross_amount: number;
+}
+
+/**
+ * Buat order dari isi cart + minta Snap token Midtrans (backend yang bicara ke
+ * Midtrans). Dipanggil saat submit form /checkout.
+ *
+ * Backend sudah mengembalikan pesan error berbahasa Indonesia yang layak
+ * ditampilkan ke user:
+ * - 422 → validasi / stok tidak cukup / produk nonaktif (`body.message` apa adanya)
+ * - 502 → gagal menghubungi payment gateway (`body.message` generik)
+ */
+export async function postOrder(payload: CreateOrderPayload): Promise<CreatedOrder> {
+  const res = await fetch(apiUrl("/api/orders"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    // Coba ambil pesan dari body; kalau body bukan JSON, fallback ke pesan generik.
+    const message = await res
+      .json()
+      .then((body: { message?: string }) => body?.message)
+      .catch(() => undefined);
+
+    if ((res.status === 422 || res.status === 502) && message) {
+      throw new Error(message);
+    }
+    throw new Error(message ?? `Gagal membuat order (HTTP ${res.status}).`);
+  }
+
+  const json = (await res.json()) as Envelope<CreatedOrder>;
+  return json.data;
+}
+
 /**
  * Format harga (string decimal dari API, mis. "850000.00") → Rupiah
  * ("Rp 850.000"). Sengaja didefinisikan di sini (bukan diimpor dari

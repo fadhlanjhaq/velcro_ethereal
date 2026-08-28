@@ -1,27 +1,65 @@
 "use client";
 
 /**
- * SIMULASI — tidak terhubung ke backend/payment gateway sungguhan.
- * Dibangun untuk keperluan demo/pitching ke client (Milestone 6, Bagian C).
- * Form alamat plain text — TIDAK ada validasi ongkir asli (Biteship belum
- * diintegrasi) dan tidak dikirim ke mana pun.
+ * Langkah 1 checkout: kumpulkan data penerima, lalu serahkan isi cart ke
+ * backend.
+ *
+ * Submit → POST /api/orders (lib/api.ts `postOrder`): backend membuat order dari
+ * item cart, mengambil harga/nama dari DB, dan meminta Snap token Midtrans.
+ * Kalau sukses, lanjut ke /checkout/payment dengan `order` + `token` di query;
+ * kalau gagal, pesan error dari backend ditampilkan di sini dan halaman tidak
+ * berpindah (cart tetap utuh untuk dicoba lagi).
+ *
+ * Ongkir belum dihitung (Biteship belum terintegrasi) — backend memakai
+ * shipping_cost = 0 untuk sekarang.
  */
 
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatRupiah } from "@/lib/api";
+import { formatRupiah, postOrder } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, subtotal, count } = useCart();
-  const [form, setForm] = useState({ name: "", phone: "", address: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Simulasi: tidak ada POST order. Langsung lanjut ke pemilihan pembayaran.
-    router.push("/checkout/payment");
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const { order_number, snap_token } = await postOrder({
+        guest_name: form.name,
+        guest_email: form.email,
+        phone: form.phone,
+        address: form.address,
+        items: items.map((item) => ({
+          product_variant_id: item.productVariantId,
+          quantity: item.qty,
+        })),
+      });
+
+      router.push(
+        `/checkout/payment?order=${encodeURIComponent(order_number)}&token=${encodeURIComponent(snap_token)}`,
+      );
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : "Terjadi kesalahan. Coba lagi sebentar.",
+      );
+      setIsSubmitting(false);
+    }
   }
 
   if (items.length === 0) {
@@ -64,6 +102,13 @@ export default function CheckoutPage() {
               onChange={(v) => setForm((f) => ({ ...f, name: v }))}
             />
             <Field
+              id="email"
+              label="Email"
+              type="email"
+              value={form.email}
+              onChange={(v) => setForm((f) => ({ ...f, email: v }))}
+            />
+            <Field
               id="phone"
               label="Nomor Telepon"
               type="tel"
@@ -90,11 +135,26 @@ export default function CheckoutPage() {
               />
             </div>
 
+            {errorMessage && (
+              <p
+                role="alert"
+                className="rounded-sm border border-red-400/40 bg-red-400/10 px-4 py-3 text-sm leading-relaxed text-cream/90"
+              >
+                {errorMessage}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="mt-2 w-full rounded-full bg-gold px-8 py-3.5 text-sm font-medium uppercase tracking-[0.2em] text-ink transition-colors hover:bg-gold-dark sm:w-auto"
+              disabled={isSubmitting}
+              className={[
+                "mt-2 w-full rounded-full px-8 py-3.5 text-sm font-medium uppercase tracking-[0.2em] transition-colors sm:w-auto",
+                isSubmitting
+                  ? "cursor-not-allowed border border-cream/20 text-cream/40"
+                  : "bg-gold text-ink hover:bg-gold-dark",
+              ].join(" ")}
             >
-              Lanjut ke Pembayaran
+              {isSubmitting ? "Memproses…" : "Lanjut ke Pembayaran"}
             </button>
           </form>
 

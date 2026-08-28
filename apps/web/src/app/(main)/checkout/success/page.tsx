@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * SIMULASI — tidak terhubung ke backend/payment gateway sungguhan.
- * Dibangun untuk keperluan demo/pitching ke client (Milestone 6, Bagian C).
+ * Langkah 3 checkout: konfirmasi setelah Snap popup selesai (sukses / pending).
  *
- * Nomor order dibuat di halaman pembayaran (timestamp + random) dan dibawa ke
- * sini lewat query param `?order=` — BUKAN dari database, tidak ada order yang
- * benar-benar tersimpan. Cart di-reset saat halaman ini termuat.
+ * Nomor order asli dibawa dari halaman pembayaran lewat query param `?order=`
+ * (berasal dari POST /api/orders). Cart baru dibersihkan DI SINI — bukan saat
+ * order dibuat — supaya user yang menutup popup tanpa bayar masih punya isi cart
+ * untuk mengulang. Status pembayaran final ditentukan backend lewat webhook
+ * Midtrans, bukan halaman ini.
  */
 
 import { Suspense, useEffect } from "react";
@@ -19,7 +20,9 @@ function SuccessContent() {
   const orderNumber = params.get("order") ?? "—";
   const { clearCart } = useCart();
 
-  // Reset keranjang setelah "pembayaran" simulasi selesai.
+  // Reset keranjang begitu sampai di halaman ini (= popup Snap selesai
+  // sukses/pending). Sengaja bukan di /checkout/payment supaya cart tetap ada
+  // kalau user menutup popup tanpa membayar.
   useEffect(() => {
     clearCart();
   }, [clearCart]);
@@ -50,8 +53,8 @@ function SuccessContent() {
       </div>
 
       <p className="mt-6 text-xs leading-relaxed text-cream/40">
-        Simulasi demo — nomor order ini dibuat acak dan tidak tersimpan di
-        database mana pun.
+        Simpan nomor order ini. Status pembayaran diperbarui otomatis begitu
+        Midtrans mengonfirmasi transaksi.
       </p>
 
       <Link

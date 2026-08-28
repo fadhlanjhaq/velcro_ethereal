@@ -32,6 +32,8 @@ export interface MockCategory {
 }
 
 export interface MockProductVariant {
+  /** PK product_variants — dikirim sebagai product_variant_id saat checkout. */
+  id: number;
   size: string;
   sku: string;
   stock: number;
@@ -62,9 +64,18 @@ const SIZES = ["S", "M", "L", "XL"] as const;
 
 const JAKET: MockCategory = { id: 2, name: "Jaket", slug: "jaket" };
 
-/** Bikin 4 varian ukuran (S/M/L/XL) dengan SKU `VE-{inisial}-{ukuran}`, stok 10. */
+/**
+ * Bikin 4 varian ukuran (S/M/L/XL) dengan SKU `VE-{inisial}-{ukuran}`, stok 10.
+ *
+ * `id` di-generate berurutan lewat counter modul ini semata agar bentuk data
+ * cocok dengan payload API asli (yang punya PK). Mock ini tidak dipakai sebagai
+ * sumber data runtime — angka id-nya tidak perlu presisi ke DB.
+ */
+let mockVariantIdSeq = 0;
+
 function buildVariants(skuInitials: string): MockProductVariant[] {
   return SIZES.map((size) => ({
+    id: ++mockVariantIdSeq,
     size,
     sku: `VE-${skuInitials}-${size}`,
     stock: 10,

@@ -2,9 +2,12 @@
 
 **Status:** Aktif. Endpoint `POST /api/orders` (buat order dari cart + minta Snap
 token) dan webhook `POST /api/midtrans/notification` (payment notification —
-diproses sinkron) sudah jalan. Yang belum: reduksi stok belum di-uji end-to-end
-dengan Midtrans sandbox nyata, dan tidak ada mekanisme otomatis untuk
-refund/partial_refund maupun oversell (lihat Known Limitations).
+diproses sinkron) sudah jalan. Frontend `/checkout` → `/checkout/payment` →
+`/checkout/success` sudah di-rewire ke alur ini (tidak ada lagi simulasi).
+Yang belum: end-to-end belum di-uji dengan Midtrans sandbox nyata; tidak ada
+mekanisme otomatis untuk refund/partial_refund maupun oversell; env
+`NEXT_PUBLIC_MIDTRANS_*` belum di-wire ke build args Docker (lihat §3.10 &
+Known Limitations).
 
 **Sifat dokumen:** catatan keputusan teknis & bisnis granular untuk integrasi
 Midtrans di `apps/api`. Ini **bukan** changelog per-milestone (itu di
@@ -99,6 +102,32 @@ otomatis untuk mengembalikan stok, mengembalikan uang, atau mengubah status
 order — `mapToOrderStatus()` mengembalikan `null` untuk kedua status ini. Semua
 tindak lanjut refund dikerjakan manual oleh admin di fase ini.
 **Revisit:** lihat known limitation §3.9.
+
+### 1.8 Frontend checkout dirombak — tidak ada lagi alur simulasi
+
+Halaman `/checkout`, `/checkout/payment`, `/checkout/success` di `apps/web` yang
+sebelumnya 100% simulasi frontend (Milestone 6) kini terhubung ke backend nyata:
+
+- `/checkout` submit → `postOrder()` (`apps/web/src/lib/api.ts`) → `POST /api/orders`.
+  Kalau sukses, redirect ke `/checkout/payment?order=<no>&token=<snap_token>`;
+  kalau gagal, pesan error dari backend ditampilkan dan halaman tidak berpindah.
+- `/checkout/payment` memuat `snap.js` (`next/script`) dan langsung memanggil
+  `window.snap.pay(token, …)` — **tidak ada UI pemilihan metode** (§1.2). URL
+  `snap.js` dan `data-client-key` dibaca dari `NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION`
+  / `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY`. `onSuccess`/`onPending` → `/checkout/success`;
+  `onError`/`onClose` → tetap di halaman dengan tombol buka-lagi / kembali ke keranjang.
+- **Field email** ditambahkan ke form `/checkout` (state `{ name, email, phone,
+  address }`) karena `StoreOrderRequest` mewajibkan `guest_email`.
+- `clearCart()` dipanggil di `/checkout/success`, **bukan** saat order dibuat —
+  supaya user yang menutup popup Snap tanpa bayar masih punya isi cart untuk
+  mengulang.
+- Cart tetap in-memory (tidak persist) — titik "diserahkan ke backend" adalah
+  submit `/checkout`.
+
+Perubahan pendukung: `ProductVariantResource` (`apps/api`) kini mengekspos `id`
+varian (read-only) supaya frontend bisa mengirim `product_variant_id`; harga &
+nama tetap di-resolve ulang dari DB di backend (§2.1). `MockProductVariant`
+(`apps/web/src/lib/mock-products.ts`) ikut ditambah `id` agar kontrak tipe cocok.
 
 ---
 
@@ -295,6 +324,19 @@ memberi tahu pembeli — dikerjakan **manual oleh admin**.
 desain jalur pengembalian stok yang idempotent (kebalikan dari §1.6) dan
 kebijakan status order untuk refund penuh vs sebagian.
 
+### 3.10 `NEXT_PUBLIC_MIDTRANS_*` belum di-wire ke build Docker
+
+`apps/web` membaca `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY` dan
+`NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION`. Next.js meng-inline `NEXT_PUBLIC_*` saat
+`npm run build`, jadi nilainya harus ada **sebelum** build. Untuk dev lokal
+cukup `apps/web/.env.local` (dibuat manual, tidak di-commit). Untuk production,
+`apps/web/Dockerfile` + `docker-compose.prod.yml` **belum** meneruskan kedua var
+ini sebagai `ARG`/`ENV` build — sekarang baru `NEXT_PUBLIC_SITE_LIVE` yang
+di-wire begitu.
+**Revisit:** sebelum build image production — tambahkan keduanya mengikuti pola
+`NEXT_PUBLIC_SITE_LIVE` di `apps/web/Dockerfile` (stage `builder`) dan teruskan
+lewat `--build-arg` di CI.
+
 ---
 
 ## Referensi kode
@@ -311,8 +353,14 @@ kebijakan status order untuk refund penuh vs sebagian.
 | Exception → 502 (gateway gagal, rollback) | `apps/api/app/Exceptions/PaymentGatewayException.php` |
 | Exception (status Midtrans tak dikenal, webhook) | `apps/api/app/Exceptions/UnknownMidtransStatusException.php` |
 | Route | `apps/api/routes/api.php` (`POST /orders`, `POST /midtrans/notification`) |
-| Kredensial | `apps/api/config/services.php` (`midtrans`), `apps/api/.env.example` |
+| Kredensial (backend) | `apps/api/config/services.php` (`midtrans`), `apps/api/.env.example` |
 | Kolom Midtrans di `payments` | `apps/api/database/migrations/2026_08_28_000000_add_midtrans_fields_to_payments_table.php` |
+| Varian mengekspos `id` | `apps/api/app/Http/Resources/ProductVariantResource.php` |
+| Frontend: panggil `POST /api/orders` | `apps/web/src/lib/api.ts` (`postOrder`) |
+| Frontend: form checkout (nama/email/telepon/alamat) | `apps/web/src/app/(main)/checkout/page.tsx` |
+| Frontend: Snap popup | `apps/web/src/app/(main)/checkout/payment/page.tsx` |
+| Frontend: konfirmasi + `clearCart` | `apps/web/src/app/(main)/checkout/success/page.tsx` |
+| Frontend: env (dibuat manual) | `apps/web/.env.local` — `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY`, `NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION` |
 
 ---
 

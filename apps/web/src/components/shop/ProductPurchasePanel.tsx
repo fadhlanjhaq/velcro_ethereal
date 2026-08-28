@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * SIMULASI — panel harga + pilih ukuran + Tambah ke Keranjang.
- * Tombol "Tambah ke Keranjang" mengisi CartContext in-memory (Milestone 6,
- * Bagian C) — murni simulasi frontend untuk demo, TIDAK menyimpan order ke
- * backend / tidak terhubung ke payment gateway. Isi cart hilang saat refresh.
+ * Panel harga + pilih ukuran + Tambah ke Keranjang.
+ * Tombol "Tambah ke Keranjang" mengisi CartContext (in-memory, tidak persist —
+ * isi cart hilang saat refresh). Isi cart baru diserahkan ke backend saat
+ * checkout submit (POST /api/orders), jadi tiap item menyimpan `productVariantId`
+ * varian aslinya untuk dikirim ke sana.
  */
 
 import { useRef, useState } from "react";
@@ -32,6 +33,7 @@ export default function ProductPurchasePanel({
     if (!selectedVariant) return; // ukuran wajib dipilih dulu
     addItem({
       productId: product.id,
+      productVariantId: selectedVariant.id,
       slug: product.slug,
       name: product.name,
       size: selectedVariant.size,

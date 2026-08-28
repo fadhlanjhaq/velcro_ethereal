@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * SIMULASI — cart state 100% frontend, in-memory (React Context).
- * Dibangun untuk keperluan demo/pitching ke client (Milestone 6, Bagian C).
- * TIDAK terhubung ke backend/API order apa pun dan TIDAK di-persist ke mana pun.
+ * Cart state frontend, in-memory (React Context).
  *
- * KETERBATASAN yang DISENGAJA (bukan bug): isi cart hilang saat halaman di-refresh
- * atau tab ditutup, karena state hanya hidup di memori React. Persistensi
- * (localStorage/DB) sengaja tidak dibuat — di luar cakupan simulasi ini.
+ * Isi cart diserahkan ke backend saat checkout submit — halaman /checkout
+ * mengirim item-item ini ke POST /api/orders (lihat lib/api.ts `postOrder`).
+ *
+ * KETERBATASAN yang DISENGAJA (bukan bug): cart TIDAK di-persist ke
+ * localStorage / backend, jadi isinya hilang saat halaman di-refresh atau tab
+ * ditutup. Persistensi belum dibuat — di luar cakupan saat ini.
  */
 
 import {
@@ -20,6 +21,8 @@ import {
 
 export interface CartItem {
   productId: number;
+  /** PK product_variants — dikirim sebagai product_variant_id ke POST /api/orders. */
+  productVariantId: number;
   slug: string;
   name: string;
   size: string;
