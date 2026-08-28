@@ -51,6 +51,15 @@ function PaymentContent() {
   const order = params.get("order") ?? "";
   const token = params.get("token") ?? "";
 
+  // Total tagihan: utamakan `gross` dari query (dibawa dari /checkout, tahan
+  // refresh). Fallback ke subtotal cart hanya kalau `gross` tak ada / bukan
+  // angka valid (mis. link lama sebelum patch ini, atau cart sudah kosong).
+  const grossFromQuery = Number(params.get("gross"));
+  const displayTotal =
+    Number.isFinite(grossFromQuery) && grossFromQuery > 0
+      ? grossFromQuery
+      : subtotal;
+
   const [snapReady, setSnapReady] = useState(false);
   const [phase, setPhase] = useState<Phase>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -144,7 +153,7 @@ function PaymentContent() {
         <div className="mt-4 flex items-baseline justify-between border-t border-cream/10 pt-4">
           <span className="text-sm text-cream/70">Total tagihan</span>
           <span className="font-serif text-2xl font-medium text-gold">
-            {formatRupiah(String(subtotal))}
+            {formatRupiah(String(displayTotal))}
           </span>
         </div>
       </div>

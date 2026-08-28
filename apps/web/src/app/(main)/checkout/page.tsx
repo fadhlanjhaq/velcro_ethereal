@@ -38,7 +38,7 @@ export default function CheckoutPage() {
     setIsSubmitting(true);
 
     try {
-      const { order_number, snap_token } = await postOrder({
+      const { order_number, snap_token, gross_amount } = await postOrder({
         guest_name: form.name,
         guest_email: form.email,
         phone: form.phone,
@@ -50,7 +50,7 @@ export default function CheckoutPage() {
       });
 
       router.push(
-        `/checkout/payment?order=${encodeURIComponent(order_number)}&token=${encodeURIComponent(snap_token)}`,
+        `/checkout/payment?order=${encodeURIComponent(order_number)}&token=${encodeURIComponent(snap_token)}&gross=${gross_amount}`,
       );
     } catch (err) {
       setErrorMessage(

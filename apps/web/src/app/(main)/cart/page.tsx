@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * SIMULASI — tidak terhubung ke backend/payment gateway sungguhan.
- * Dibangun untuk keperluan demo/pitching ke client (Milestone 6, Bagian C).
- * Cart in-memory: isinya hilang saat halaman di-refresh (disengaja).
+ * Halaman keranjang — tampilkan isi cart, atur qty, hapus item, lalu lanjut ke
+ * /checkout. Cart in-memory (tidak persist): isinya hilang saat halaman
+ * di-refresh.
  */
 
 import Image from "next/image";
@@ -128,8 +128,8 @@ export default function CartPage() {
                 </Link>
               </div>
               <p className="mt-4 text-xs leading-relaxed text-cream/40">
-                Simulasi demo — keranjang tidak tersimpan permanen dan akan
-                kosong setelah halaman di-refresh.
+                Keranjang tidak tersimpan permanen dan akan kosong setelah
+                halaman di-refresh.
               </p>
             </aside>
           </div>
