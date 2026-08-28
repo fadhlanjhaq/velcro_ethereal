@@ -18,7 +18,7 @@ return [
 
     'paths' => ['api/*'],
 
-    'allowed_methods' => ['GET', 'OPTIONS'],
+    'allowed_methods' => ['GET', 'POST', 'OPTIONS'],
 
     // Origin dev Next.js (localhost:3000). Tambahkan origin production nyata
     // saat deploy kalau storefront pernah memanggil Laravel lintas-origin.

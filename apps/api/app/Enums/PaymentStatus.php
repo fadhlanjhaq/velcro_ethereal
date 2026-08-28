@@ -9,4 +9,9 @@ enum PaymentStatus: string
     case Expire = 'expire';
     case Cancel = 'cancel';
     case Deny = 'deny';
+    case Capture = 'capture';
+    case Refund = 'refund';
+    case PartialRefund = 'partial_refund';
+    case Authorize = 'authorize';
+    case Failure = 'failure';
 }
