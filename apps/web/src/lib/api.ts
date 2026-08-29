@@ -212,6 +212,8 @@ export const getSiteContent = cache(async (): Promise<SiteContent> => {
 
 /** Payload yang dikirim ke POST /api/orders (lihat App\Http\Requests\StoreOrderRequest). */
 export interface CreateOrderPayload {
+  /** UUID per percobaan checkout — backend men-dedup klik ganda / retry. */
+  idempotency_key: string;
   guest_name: string;
   guest_email: string;
   phone: string;
@@ -230,9 +232,14 @@ export interface CreatedOrder {
  * Buat order dari isi cart + minta Snap token Midtrans (backend yang bicara ke
  * Midtrans). Dipanggil saat submit form /checkout.
  *
+ * Sukses: 201 (order baru) atau 200 (idempotency-hit — key ini sudah pernah
+ * diproses). Body keduanya sama: `{ data: { order_number, snap_token,
+ * gross_amount } }`, jadi `res.ok` (true untuk 200 & 201) menangani keduanya.
+ *
  * Backend sudah mengembalikan pesan error berbahasa Indonesia yang layak
  * ditampilkan ke user:
  * - 422 → validasi / stok tidak cukup / produk nonaktif (`body.message` apa adanya)
+ * - 409 → order dengan key ini masih diproses (`body.message` apa adanya)
  * - 502 → gagal menghubungi payment gateway (`body.message` generik)
  */
 export async function postOrder(payload: CreateOrderPayload): Promise<CreatedOrder> {
@@ -250,7 +257,10 @@ export async function postOrder(payload: CreateOrderPayload): Promise<CreatedOrd
       .then((body: { message?: string }) => body?.message)
       .catch(() => undefined);
 
-    if ((res.status === 422 || res.status === 502) && message) {
+    if (
+      (res.status === 422 || res.status === 409 || res.status === 502) &&
+      message
+    ) {
       throw new Error(message);
     }
     throw new Error(message ?? `Gagal membuat order (HTTP ${res.status}).`);

@@ -32,6 +32,11 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Satu idempotency key per page load (lazy initializer → tidak di-generate
+  // ulang tiap render). Retry submit setelah gagal mengirim key yang SAMA
+  // supaya backend men-dedup. Reload halaman = key baru = percobaan baru.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMessage(null);
@@ -39,6 +44,7 @@ export default function CheckoutPage() {
 
     try {
       const { order_number, snap_token, gross_amount } = await postOrder({
+        idempotency_key: idempotencyKey,
         guest_name: form.name,
         guest_email: form.email,
         phone: form.phone,

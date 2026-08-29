@@ -11,8 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
-    'order_number', 'user_id', 'guest_email', 'guest_name', 'shipping_address',
-    'subtotal', 'shipping_cost', 'total', 'status',
+    'order_number', 'idempotency_key', 'user_id', 'guest_email', 'guest_name',
+    'shipping_address', 'subtotal', 'shipping_cost', 'total', 'status',
 ])]
 class Order extends Model
 {

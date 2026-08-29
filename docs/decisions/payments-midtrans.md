@@ -4,10 +4,11 @@
 token) dan webhook `POST /api/midtrans/notification` (payment notification —
 diproses sinkron) sudah jalan. Frontend `/checkout` → `/checkout/payment` →
 `/checkout/success` sudah di-rewire ke alur ini (tidak ada lagi simulasi).
-Yang belum: end-to-end belum di-uji dengan Midtrans sandbox nyata; tidak ada
-mekanisme otomatis untuk refund/partial_refund maupun oversell; env
-`NEXT_PUBLIC_MIDTRANS_*` belum di-wire ke build args Docker (lihat §3.10 &
-Known Limitations).
+`POST /api/orders` idempotent per `idempotency_key` (§2.10). Yang belum:
+end-to-end belum di-uji dengan Midtrans sandbox nyata; tidak ada mekanisme
+otomatis untuk refund/partial_refund maupun oversell; env `NEXT_PUBLIC_MIDTRANS_*`
+belum di-wire ke build args Docker; **migration `orders.idempotency_key` belum
+di-`migrate`** (dibuat, menunggu review). Lihat §3.10 & Known Limitations.
 
 **Sifat dokumen:** catatan keputusan teknis & bisnis granular untuk integrasi
 Midtrans di `apps/api`. Ini **bukan** changelog per-milestone (itu di
@@ -224,6 +225,32 @@ signature (§2.5) + refetch status resmi (§2.6) sudah jadi lapisan kepercayaan
 utama, jadi cross-check ini hanya jaring pengaman murah. Webhook tetap diproses
 seperti biasa apa pun hasil perbandingannya.
 
+### 2.10 Idempotency key wajib per percobaan checkout
+
+`POST /api/orders` **mewajibkan** `idempotency_key` (string ≤100,
+`StoreOrderRequest`). Frontend meng-generate satu UUID (`crypto.randomUUID()`)
+**sekali per page load** `/checkout` (`useState` lazy initializer) dan
+mengirimkannya di setiap submit — jadi klik ganda / retry setelah error / retry
+jaringan pada percobaan checkout yang sama memakai key yang sama.
+
+Enforcement **dua lapis**:
+1. **Cek aplikasi** (sebelum transaksi): `OrderController::store()` mencari
+   `Order` dengan key itu. Kalau ada + punya `payment.snap_token` → balas **200**
+   dengan body yang sama persis (`order_number`, `snap_token`, `gross_amount`),
+   **tanpa** memanggil Midtrans atau membuat order baru. Kalau ada tapi belum
+   lengkap → **409** "Order ini sedang diproses, coba beberapa saat lagi."
+2. **UNIQUE index DB** (`orders.idempotency_key`): menutup celah race di mana dua
+   request lolos cek aplikasi bersamaan. `Order::create()` dibungkus try/catch
+   `UniqueConstraintViolationException`; kalau pesan menyebut `idempotency_key`
+   (bukan mis. tabrakan `order_number` — itu tetap naik), transaksi rollback dan
+   `store()` me-replay response order pemenang (200) atau balas 409. Cek-lalu-
+   insert saja **tidak** dipakai karena ada jendela race di antaranya.
+
+Deteksi unique-violation memakai `Illuminate\Database\UniqueConstraintViolationException`
+bawaan Laravel 13 (auto-dilempar; per-driver: MySQL `1062`, SQLite
+`UNIQUE constraint failed`), lalu `str_contains($e->getMessage(), 'idempotency_key')`
+untuk memastikan index yang dilanggar memang kolom itu.
+
 ---
 
 ## 3. Known Limitations (sengaja belum ditambal)
@@ -238,15 +265,23 @@ sekarang.
 **Revisit:** kalau volume order naik signifikan — ganti ke generator dengan
 jaminan keunikan (mis. sequence DB, atau retry-on-collision).
 
-### 3.2 Idempotency / double-submit — **prioritas tinggi fase berikutnya**
+### 3.2 Idempotency / double-submit — SUDAH diimplementasi (scope terbatas)
 
-Klik ganda tombol bayar atau retry jaringan dari client bisa membuat **dua order
-+ dua Snap token terpisah** untuk maksud beli yang sama. Belum ada dedupe key
-atau lock.
-**Revisit:** sebelum traffic production riil jalan. Ini **bukan** limitation yang
-boleh dilupakan selamanya — masuk backlog fase berikutnya bersama webhook
-handler. Kandidat solusi: idempotency key dari client, atau nolak order baru
-selama masih ada payment `pending` untuk `guest_email` + isi cart yang sama.
+**Ditutup** oleh `idempotency_key` wajib + UNIQUE index DB (lihat §2.10): klik
+ganda, retry setelah error, dan retry jaringan dalam **satu percobaan checkout**
+(satu page load `/checkout`, belum di-refresh) tidak lagi membuat order + Snap
+token ganda — request kedua dst. mendapat kembali order & token yang sama.
+
+**Residual limitation (keputusan sadar, di luar scope):** idempotency ini
+**tidak** mencegah user checkout ulang dari nol. Reload `/checkout` meng-generate
+key baru, jadi submit berikutnya dianggap percobaan checkout **baru yang sah**
+dan membuat order + Snap token baru. Order lama yang belum dibayar akan
+`expire` sendiri di Midtrans (dan lewat webhook → status order `cancelled`),
+tapi untuk sementara bisa ada beberapa order `pending` milik satu pembeli.
+**Revisit:** kalau ini jadi masalah nyata (mis. laporan order ganda membingungkan
+admin) — butuh fitur terpisah, mis. deteksi "kamu punya order pending" berdasarkan
+`guest_email` / session sebelum mengizinkan checkout baru. Bukan bagian dari
+idempotency key.
 
 ### 3.3 Transaksi "nyangkut" di Midtrans
 
@@ -352,9 +387,11 @@ lewat `--build-arg` di CI.
 | Exception → 422 (nominal tidak valid) | `apps/api/app/Exceptions/InvalidOrderTotalException.php` |
 | Exception → 502 (gateway gagal, rollback) | `apps/api/app/Exceptions/PaymentGatewayException.php` |
 | Exception (status Midtrans tak dikenal, webhook) | `apps/api/app/Exceptions/UnknownMidtransStatusException.php` |
+| Exception (race idempotency_key, replay/409) | `apps/api/app/Exceptions/DuplicateIdempotencyKeyException.php` |
 | Route | `apps/api/routes/api.php` (`POST /orders`, `POST /midtrans/notification`) |
 | Kredensial (backend) | `apps/api/config/services.php` (`midtrans`), `apps/api/.env.example` |
 | Kolom Midtrans di `payments` | `apps/api/database/migrations/2026_08_28_000000_add_midtrans_fields_to_payments_table.php` |
+| Kolom `orders.idempotency_key` (nullable + UNIQUE) | `apps/api/database/migrations/2026_08_29_000000_add_idempotency_key_to_orders_table.php` |
 | Varian mengekspos `id` | `apps/api/app/Http/Resources/ProductVariantResource.php` |
 | Frontend: panggil `POST /api/orders` | `apps/web/src/lib/api.ts` (`postOrder`) |
 | Frontend: form checkout (nama/email/telepon/alamat) | `apps/web/src/app/(main)/checkout/page.tsx` |

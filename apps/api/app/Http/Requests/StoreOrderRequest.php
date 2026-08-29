@@ -27,6 +27,10 @@ class StoreOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Idempotency: 1 percobaan checkout = 1 key (di-generate sekali per
+            // page load frontend). Cukup string bebas — tidak dipaksa format UUID
+            // supaya cara generate di frontend bebas berubah.
+            'idempotency_key' => ['required', 'string', 'max:100'],
             'guest_name' => ['required', 'string', 'max:255'],
             'guest_email' => ['required', 'email'],
             'phone' => ['required', 'string', 'max:30'],
