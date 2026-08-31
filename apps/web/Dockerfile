@@ -44,6 +44,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_SITE_LIVE=false
 ENV NEXT_PUBLIC_SITE_LIVE=$NEXT_PUBLIC_SITE_LIVE
 
+# Midtrans Snap client-side config. Same rule as NEXT_PUBLIC_SITE_LIVE above:
+# NEXT_PUBLIC_* is inlined by webpack at `npm run build`, so these must be ENV
+# before the build runs and cannot be corrected from the runtime environment.
+# No default for the client key (nothing safe to fall back to); IS_PRODUCTION
+# defaults to false so an unspecified build points at the sandbox, not live.
+ARG NEXT_PUBLIC_MIDTRANS_CLIENT_KEY
+ENV NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=$NEXT_PUBLIC_MIDTRANS_CLIENT_KEY
+ARG NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION=false
+ENV NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION=$NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION
+
 # Requires `output: 'standalone'` in next.config.ts (produces .next/standalone).
 RUN npm run build
 
