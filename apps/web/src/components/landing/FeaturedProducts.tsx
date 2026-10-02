@@ -8,6 +8,7 @@ import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { formatRupiah, type Product } from "@/lib/api";
 import PhotoFallback from "@/components/shop/PhotoFallback";
+import { SHOP_CLOSED_PATH, SHOP_OPEN } from "@/lib/shop-status";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -67,7 +68,7 @@ export default function FeaturedProducts({
             </h2>
           </div>
           <Link
-            href="/shop"
+            href={SHOP_OPEN ? "/shop" : SHOP_CLOSED_PATH}
             className="group inline-flex items-center gap-2 self-start text-sm font-medium uppercase tracking-[0.2em] text-ink transition-colors hover:text-gold-dark sm:self-auto"
           >
             Lihat Koleksi Lengkap
@@ -84,7 +85,7 @@ export default function FeaturedProducts({
           {products.map((product) => (
             <Link
               key={product.id}
-              href={`/shop/${product.slug}`}
+              href={SHOP_OPEN ? `/shop/${product.slug}` : SHOP_CLOSED_PATH}
               data-product-card
               className="group flex flex-col"
             >

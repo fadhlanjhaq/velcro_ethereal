@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { SHOP_CLOSED_PATH, SHOP_OPEN } from "@/lib/shop-status";
 
 /**
  * Footer global (Milestone 6, Bagian A) — dipasang di root layout, muncul di
@@ -66,7 +67,7 @@ export default function SiteFooter() {
             Koleksi
           </p>
           <Link
-            href="/shop"
+            href={SHOP_OPEN ? "/shop" : SHOP_CLOSED_PATH}
             className="w-fit text-sm text-cream/70 transition-colors hover:text-gold"
           >
             Heritage Collection

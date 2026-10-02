@@ -44,6 +44,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_SITE_LIVE=false
 ENV NEXT_PUBLIC_SITE_LIVE=$NEXT_PUBLIC_SITE_LIVE
 
+# Shop gate (see src/lib/shop-status.ts): while this is not "true", /shop,
+# /cart and /checkout redirect to /shop-segera. Build-time inlined like the
+# flags above. Defaults to true now that Midtrans is live; pass
+# --build-arg NEXT_PUBLIC_SHOP_OPEN=false to close the shop again.
+ARG NEXT_PUBLIC_SHOP_OPEN=true
+ENV NEXT_PUBLIC_SHOP_OPEN=$NEXT_PUBLIC_SHOP_OPEN
+
 # Midtrans Snap client-side config. Same rule as NEXT_PUBLIC_SITE_LIVE above:
 # NEXT_PUBLIC_* is inlined by webpack at `npm run build`, so these must be ENV
 # before the build runs and cannot be corrected from the runtime environment.

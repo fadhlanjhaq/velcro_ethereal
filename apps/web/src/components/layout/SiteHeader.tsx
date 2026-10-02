@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { useLenis } from "@/components/SmoothScrollProvider";
 import {
@@ -10,6 +10,7 @@ import {
   CollectionsDropdownDesktop,
 } from "@/components/layout/CollectionsNav";
 import type { AnnouncementItem } from "@/lib/api";
+import { SHOP_CLOSED_MESSAGE, SHOP_OPEN } from "@/lib/shop-status";
 
 const navLinkClass =
   "font-jost text-xs font-medium uppercase tracking-[0.25em] text-cream/80 transition-colors hover:text-gold";
@@ -24,6 +25,27 @@ export default function SiteHeader({
   const lenisRef = useLenis();
   const headerRef = useRef<HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [shopNoticeOpen, setShopNoticeOpen] = useState(false);
+  const shopNoticeRef = useRef<HTMLDivElement>(null);
+
+  // Popover info shop tertutup: tutup lewat Esc atau klik/tap di luar.
+  useEffect(() => {
+    if (!shopNoticeOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setShopNoticeOpen(false);
+    }
+    function onPointerDown(event: PointerEvent) {
+      if (!shopNoticeRef.current?.contains(event.target as Node)) {
+        setShopNoticeOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [shopNoticeOpen]);
 
   const isHome = pathname === "/";
 
@@ -104,6 +126,7 @@ export default function SiteHeader({
             </nav>
 
             <div className="flex items-center gap-3">
+              {SHOP_OPEN ? (
               <Link
                 href="/cart"
                 className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-gold/40 text-cream transition-colors hover:border-gold hover:text-gold"
@@ -130,6 +153,44 @@ export default function SiteHeader({
                   </span>
                 )}
               </Link>
+              ) : (
+                <div ref={shopNoticeRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShopNoticeOpen((open) => !open)}
+                    aria-expanded={shopNoticeOpen}
+                    aria-label="Shop sedang dikembangkan"
+                    className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-gold/40 text-cream transition-colors hover:border-gold hover:text-gold"
+                  >
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                  <path d="M3 6h18" />
+                  <path d="M16 10a4 4 0 0 1-8 0" />
+                </svg>
+                  </button>
+                  {shopNoticeOpen && (
+                    <div
+                      role="status"
+                      className="font-jost absolute right-0 top-full mt-3 w-60 rounded-sm border border-gold/40 bg-ink p-4 text-left text-xs leading-relaxed text-cream/80 shadow-lg"
+                    >
+                      <p className="mb-1 font-semibold uppercase tracking-[0.2em] text-gold">
+                        Segera Hadir
+                      </p>
+                      {SHOP_CLOSED_MESSAGE}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <button
                 type="button"

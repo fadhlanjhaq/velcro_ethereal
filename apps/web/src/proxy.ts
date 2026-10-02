@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { SHOP_CLOSED_PATH, SHOP_OPEN, isShopPath } from "@/lib/shop-status";
 
 /**
  * Gate produksi — mengarahkan seluruh route (main) ke /coming-soon selama
@@ -29,6 +30,13 @@ export function proxy(request: NextRequest) {
 
   if (gateActive) {
     return NextResponse.redirect(new URL("/coming-soon", request.url));
+  }
+
+  // Kunci kedua: selama shop belum dibuka (NEXT_PUBLIC_SHOP_OPEN), jalur
+  // belanja dialihkan ke halaman info. Berlaku juga di dev supaya bisa dites;
+  // set NEXT_PUBLIC_SHOP_OPEN=true di .env.local untuk mengerjakan checkout.
+  if (!SHOP_OPEN && isShopPath(request.nextUrl.pathname)) {
+    return NextResponse.redirect(new URL(SHOP_CLOSED_PATH, request.url));
   }
 
   return NextResponse.next();

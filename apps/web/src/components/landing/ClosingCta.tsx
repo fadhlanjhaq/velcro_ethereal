@@ -6,6 +6,7 @@ import { gsap } from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import type { ClosingCtaContent } from "@/lib/api";
+import { SHOP_CLOSED_PATH, SHOP_OPEN, isShopPath } from "@/lib/shop-status";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -20,6 +21,11 @@ export default function ClosingCta({
   content: ClosingCtaContent;
 }) {
   const root = useRef<HTMLElement>(null);
+  // Tujuan tombol dikelola CMS; kalau menunjuk jalur belanja saat shop tutup,
+  // alihkan ke halaman info alih-alih dibiarkan kena redirect proxy.
+  const requestedHref = content.cta_href ?? "/shop";
+  const ctaHref =
+    !SHOP_OPEN && isShopPath(requestedHref) ? SHOP_CLOSED_PATH : requestedHref;
 
   useGSAP(
     () => {
@@ -67,7 +73,7 @@ export default function ClosingCta({
       </p>
       <Link
         data-cta-reveal
-        href={content.cta_href ?? "/shop"}
+        href={ctaHref}
         className="mt-12 inline-flex items-center gap-3 rounded-full border border-gold px-9 py-4 text-sm font-medium uppercase tracking-[0.2em] text-cream transition-colors duration-300 hover:bg-gold hover:text-ink"
       >
         {content.cta_label}
