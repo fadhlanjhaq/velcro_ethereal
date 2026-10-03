@@ -103,6 +103,7 @@ Usia 24–45: pengusaha, kreatif profesional, kolektor fashion, dan pecinta seni
 - Integrasi Midtrans — channel: QRIS, Virtual Account, e-wallet, kartu kredit/cicilan
 - Webhook untuk update status pembayaran otomatis (tanpa konfirmasi manual admin)
 - Invoice otomatis per order
+- **Status (Oktober 2026):** checkout Midtrans Snap + webhook sudah live di production dan terverifikasi dengan transaksi uji. Detail keputusan: `docs/decisions/payments-midtrans.md`; alur rilis: `docs/deploy.md`.
 
 ### 5.5 Pengiriman
 - Kalkulasi ongkir otomatis (multi-kurir: JNE, J&T, SiCepat, dll via Biteship)

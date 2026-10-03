@@ -693,3 +693,52 @@ replay animasi: diverifikasi via scroll terprogram naik-turun berkali-kali
 (termasuk kunjungan ketiga ke section yang sama) dan via klik nyata pada nav
 link dari bagian bawah halaman (real Lenis `scrollTo`, bukan simulasi) —
 kedua jalur mengonfirmasi replay bekerja tanpa logic tambahan terpisah.
+
+
+---
+
+## Milestone 10 — Integrasi Midtrans Snap & Pembukaan Kembali Shop
+**Tanggal:** 3 Oktober 2026
+**Status:** Selesai (live di production, diverifikasi transaksi uji)
+
+Pekerjaan lintas `apps/api` dan `apps/web`, dikerjakan bertahap sejak 28
+Agustus 2026 dan ditutup dengan go-live hari ini.
+
+Bagian A — Pembayaran (28–31 Agustus). Midtrans Snap end-to-end: endpoint
+`POST /api/orders` membuat order dari cart dan meminta Snap token; webhook
+`POST /api/midtrans/notification` memperbarui status pembayaran (signature
+diverifikasi, status di-refetch dari Midtrans). Frontend checkout dirombak ke
+Snap popup (alur simulasi Milestone 6 dihapus). `idempotency_key` + UNIQUE index
+mencegah order ganda saat double-submit. Build-arg `NEXT_PUBLIC_MIDTRANS_*`
+ditambahkan ke `apps/web/Dockerfile`. Keputusan, catatan keamanan, dan known
+limitations lengkap ada di `docs/decisions/payments-midtrans.md`.
+
+Bagian B — Gate shop. Selama integrasi belum siap, jalur belanja (`/shop`,
+`/cart`, `/checkout`) dikunci: `proxy.ts` mengalihkan ke halaman `/shop-segera`,
+link di header/footer/landing diganti, dan ikon cart di header jadi popover
+info. Semuanya dikendalikan satu saklar `NEXT_PUBLIC_SHOP_OPEN`
+(`src/lib/shop-status.ts`), yang tertanam saat build. Pada milestone ini default
+Dockerfile dibalik ke `true` (commit `db85b3b`). Untuk menutup shop lagi:
+build image web dengan `--build-arg NEXT_PUBLIC_SHOP_OPEN=false`. Kode gate
+sengaja dipertahankan sebagai saklar darurat.
+
+Bagian C — Rilis ke production. Alur build/push/deploy dan jebakan yang
+ditemui didokumentasikan di `docs/deploy.md`. Ringkasnya: image web dan api
+dibangun terpisah di Mac (`linux/amd64`), di-push ke GHCR, lalu di-pull di VPS.
+Ditemukan bahwa image api di server masih versi 13 Agustus (tanpa kode
+Midtrans), sehingga web baru sempat berbicara dengan backend lama; ditutup
+dengan build ulang api + `migrate --force` (2 migration baru: field Midtrans di
+`payments`, `idempotency_key` di `orders`). Key Midtrans production diisi
+manual di `.env` API di server.
+
+Verifikasi: setelah deploy, `route:list` menampilkan `POST api/orders`; cek
+config menunjukkan key server/client terisi dan mode production aktif (tanpa
+mencetak nilai key). Notification URL production didaftarkan di dashboard
+Midtrans. Satu transaksi uji dari domain production berhasil dan order tercatat
+di admin Filament.
+
+Batasan / belum dikerjakan: known limitations di
+`docs/decisions/payments-midtrans.md` §3 (mis. rate limiting, refund manual,
+rekonsiliasi transaksi nyangkut) tetap berlaku. `docs/design-handoff/` belum
+di-commit saat milestone ini ditulis. Tidak ada key atau isi `.env` yang
+dicatat di dokumentasi mana pun.

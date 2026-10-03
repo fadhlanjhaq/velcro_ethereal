@@ -359,18 +359,23 @@ memberi tahu pembeli — dikerjakan **manual oleh admin**.
 desain jalur pengembalian stok yang idempotent (kebalikan dari §1.6) dan
 kebijakan status order untuk refund penuh vs sebagian.
 
-### 3.10 `NEXT_PUBLIC_MIDTRANS_*` belum di-wire ke build Docker
+### 3.10 `NEXT_PUBLIC_MIDTRANS_*` build Docker — SUDAH di-wire
 
 `apps/web` membaca `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY` dan
 `NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION`. Next.js meng-inline `NEXT_PUBLIC_*` saat
-`npm run build`, jadi nilainya harus ada **sebelum** build. Untuk dev lokal
-cukup `apps/web/.env.local` (dibuat manual, tidak di-commit). Untuk production,
-`apps/web/Dockerfile` + `docker-compose.prod.yml` **belum** meneruskan kedua var
-ini sebagai `ARG`/`ENV` build — sekarang baru `NEXT_PUBLIC_SITE_LIVE` yang
-di-wire begitu.
-**Revisit:** sebelum build image production — tambahkan keduanya mengikuti pola
-`NEXT_PUBLIC_SITE_LIVE` di `apps/web/Dockerfile` (stage `builder`) dan teruskan
-lewat `--build-arg` di CI.
+`npm run build`, jadi nilainya harus ada **sebelum** build dan tidak bisa
+diperbaiki dari environment runtime.
+
+**Ditutup** oleh commit `3ab511c`: `apps/web/Dockerfile` (stage `builder`)
+sekarang menerima keduanya sebagai `ARG`/`ENV`, mengikuti pola
+`NEXT_PUBLIC_SITE_LIVE`. Nilainya diteruskan lewat `--build-arg` saat build
+image (lihat `docs/deploy.md`). Untuk dev lokal tetap cukup `apps/web/.env.local`
+(dibuat manual, tidak di-commit).
+
+**Residual:** karena nilainya tertanam di image, ganti mode sandbox ↔ production
+berarti **build ulang image web**, bukan sekadar restart container. Client key
+production dan sandbox berbeda; `IS_PRODUCTION` harus cocok dengan jenis
+key-nya, kalau tidak Snap gagal.
 
 ---
 
