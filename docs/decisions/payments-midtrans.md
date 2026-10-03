@@ -1,14 +1,20 @@
 # Keputusan Integrasi Pembayaran — Midtrans
 
-**Status:** Aktif. Endpoint `POST /api/orders` (buat order dari cart + minta Snap
+**Status:** **Live di production sejak 3 Oktober 2026** (mode production Midtrans,
+bukan sandbox). Endpoint `POST /api/orders` (buat order dari cart + minta Snap
 token) dan webhook `POST /api/midtrans/notification` (payment notification —
-diproses sinkron) sudah jalan. Frontend `/checkout` → `/checkout/payment` →
-`/checkout/success` sudah di-rewire ke alur ini (tidak ada lagi simulasi).
-`POST /api/orders` idempotent per `idempotency_key` (§2.10). Yang belum:
-end-to-end belum di-uji dengan Midtrans sandbox nyata; tidak ada mekanisme
-otomatis untuk refund/partial_refund maupun oversell; env `NEXT_PUBLIC_MIDTRANS_*`
-belum di-wire ke build args Docker; **migration `orders.idempotency_key` belum
-di-`migrate`** (dibuat, menunggu review). Lihat §3.10 & Known Limitations.
+diproses sinkron) berjalan di `velcroethereal.com`; satu transaksi uji dari
+domain production berhasil dan order tercatat di admin Filament. Frontend
+`/checkout` → `/checkout/payment` → `/checkout/success` terhubung ke alur ini
+(tidak ada lagi simulasi). `POST /api/orders` idempotent per `idempotency_key`
+(§2.10); migration `orders.idempotency_key` sudah dijalankan di production, dan
+`NEXT_PUBLIC_MIDTRANS_*` sudah di-wire ke build args Docker (§3.10).
+
+Yang belum / masih terbuka: ongkir (Biteship) belum terintegrasi — ongkir selalu
+0 dan data kurir kosong (§1.3); belum ada invoice dan email konfirmasi ke
+pembeli; refund/partial_refund dan oversell ditangani manual; belum ada rate
+limiting. Lihat §3 Known Limitations. Dokumen ini hanya mencatat kondisi
+production; tidak ada key atau isi `.env` yang dicatat di sini.
 
 **Sifat dokumen:** catatan keputusan teknis & bisnis granular untuk integrasi
 Midtrans di `apps/api`. Ini **bukan** changelog per-milestone (itu di
@@ -60,6 +66,10 @@ alur produksi.
 `total`, dan (kalau dipakai) ditambahkan sebagai baris tersendiri di
 `item_details` Midtrans supaya `sum(item_details) == gross_amount` tetap terjaga.
 Ada `TODO(biteship)` di kode pada titik ini.
+
+**Status (Oktober 2026):** ini akibat langsung di production — semua order
+tercatat dengan ongkir Rp 0 dan data kurir/jasa kirim kosong. Menjadi pekerjaan
+berikutnya dan **harus selesai sebelum situs dipublikasikan ke media**.
 
 ### 1.4 Guest checkout only
 
@@ -373,6 +383,7 @@ image (lihat `docs/deploy.md`). Untuk dev lokal tetap cukup `apps/web/.env.local
 (dibuat manual, tidak di-commit).
 
 **Residual:** karena nilainya tertanam di image, ganti mode sandbox ↔ production
+(mis. untuk menguji fitur baru; production adalah mode yang berjalan sekarang)
 berarti **build ulang image web**, bukan sekadar restart container. Client key
 production dan sandbox berbeda; `IS_PRODUCTION` harus cocok dengan jenis
 key-nya, kalau tidak Snap gagal.

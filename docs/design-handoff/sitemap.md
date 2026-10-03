@@ -1,29 +1,34 @@
 # Sitemap — Velcro Ethereal (kondisi repo aktual)
 
-Sumber: scan langsung `apps/web/src/app/**/page.tsx` pada commit `125682d`
-(branch `main`, per 2026-07-25). Ini BUKAN daftar rencana dari `docs/SOT.md` —
-SOT berisi scope produk lengkap (auth, wishlist, search/filter, dll) yang
-**belum diimplementasikan di frontend**. Daftar di bawah murni route yang
-punya `page.tsx` sungguhan.
+Sumber: scan `apps/web/src/app/**/page.tsx` dan `src/proxy.ts`, disinkronkan
+dengan kondisi production per **3 Oktober 2026** (setelah Milestone 10). Ini
+BUKAN daftar rencana dari `docs/SOT.md` — SOT berisi scope produk lengkap
+(auth, wishlist, search/filter, dll) yang sebagian **belum diimplementasikan**.
+Daftar di bawah murni route yang punya `page.tsx` sungguhan.
 
 ## Ringkasan status
 
 | Route | File | Status | Sumber data |
 |---|---|---|---|
-| `/` | `app/(main)/page.tsx` | **LIVE** | API Laravel (`getProducts()`) |
+| `/` | `app/(main)/page.tsx` | **LIVE** | API Laravel (`getProducts()`, `getSiteContent()`) |
 | `/shop` | `app/(main)/shop/page.tsx` | **LIVE** | API Laravel (`getProducts()`) |
 | `/shop/[slug]` | `app/(main)/shop/[slug]/page.tsx` | **LIVE** | API Laravel (`getProductBySlug()`) |
-| `/cart` | `app/(main)/cart/page.tsx` | **LIVE (UI), SIMULASI (data)** | in-memory React Context, hilang saat refresh |
-| `/checkout` | `app/(main)/checkout/page.tsx` | **LIVE (UI), SIMULASI (data)** | form lokal, tidak di-submit ke mana pun |
-| `/checkout/payment` | `app/(main)/checkout/payment/page.tsx` | **LIVE (UI), SIMULASI (data)** | tidak ada payment gateway asli |
-| `/checkout/success` | `app/(main)/checkout/success/page.tsx` | **LIVE (UI), SIMULASI (data)** | nomor order acak, tidak tersimpan ke DB |
+| `/cart` | `app/(main)/cart/page.tsx` | **LIVE** | React Context di browser (tidak persisten, hilang saat refresh) |
+| `/checkout` | `app/(main)/checkout/page.tsx` | **LIVE** | `POST /api/orders` → order tersimpan + Snap token. **Ongkir belum ada** |
+| `/checkout/payment` | `app/(main)/checkout/payment/page.tsx` | **LIVE** | Midtrans Snap (production) |
+| `/checkout/success` | `app/(main)/checkout/success/page.tsx` | **LIVE** | nomor order dari backend |
+| `/kontak` | `app/(main)/kontak/page.tsx` | **LIVE** | CMS (`getSiteContent()`, section contact) |
+| `/shop-segera` | `app/(main)/shop-segera/page.tsx` | **Dormant** (saklar darurat) | statis; hanya tampil bila shop ditutup |
 | `/info` | `app/info/page.tsx` | **LIVE** | konten statis (link-in-bio) |
-| `/coming-soon` | `app/coming-soon/page.tsx` | **LIVE**, tapi hanya diakses lewat gate produksi | konten statis |
+| `/coming-soon` | `app/coming-soon/page.tsx` | **Dormant** di production sekarang | statis; hanya tampil bila `NEXT_PUBLIC_SITE_LIVE` bukan `true` |
 
-Tidak ada halaman dengan `page.tsx` kosong/stub murni — semua route di atas
-punya UI nyata. Yang "belum nyata" bukan di level halaman, tapi di level
-**fungsionalitas transaksi** (lihat kolom "SIMULASI" di atas dan detail per
-halaman di bawah).
+Selain halaman storefront ada **admin Filament** di `/admin` (dilayani Laravel,
+bukan `apps/web`): Produk, Kategori, Order, dan halaman Site Content.
+
+Status gate di production saat ini: `SITE_LIVE=true` dan `SHOP_OPEN=true`,
+sehingga `/coming-soon` dan `/shop-segera` tidak tampil. Keduanya sengaja
+dipertahankan sebagai saklar darurat (tertanam saat build, ubah = build ulang
+image web; lihat `docs/deploy.md`).
 
 ---
 
@@ -47,56 +52,72 @@ halaman di bawah).
 - Server Component. `getProductBySlug(slug)`, `notFound()` (404 Next.js
   bawaan) kalau slug tak ada.
 - Galeri foto (atau fallback), story, deskripsi, harga, pilihan ukuran.
-- Tombol "Tambah ke Keranjang" (`ProductPurchasePanel`, client island):
-  **aktif secara UI** sejak Milestone 6, tapi hanya mengisi cart in-memory —
-  **tidak ada order yang benar-benar dibuat**.
+- Tombol "Tambah ke Keranjang" (`ProductPurchasePanel`, client island): mengisi
+  cart di browser; order baru dibuat saat checkout.
 - **LIVE**.
 
 ### `/cart` — Keranjang
-- Client Component. State dari `CartContext` (React Context murni, tanpa
-  persistence — refresh = kosong lagi, disengaja).
-- **LIVE (UI)**, ditandai eksplisit di komentar kode sebagai **SIMULASI**
-  demo/pitching, bukan e-commerce fungsional.
+- Client Component. State dari `CartContext` (React Context, tanpa persistence —
+  refresh = kosong lagi, disengaja).
+- **LIVE**. Harga final selalu diambil dari DB oleh backend saat checkout, bukan
+  dari cart.
 
-### `/checkout` — Alamat pengiriman
-- Client Component. Form nama/telepon/alamat plain text, **tanpa validasi
-  ongkir** (Biteship belum diintegrasi). Submit form **tidak melakukan POST
-  apa pun** — langsung `router.push("/checkout/payment")`.
-- **LIVE (UI), SIMULASI (data)**.
+### `/checkout` — Data pembeli & alamat
+- Client Component. Form nama/email/telepon/alamat. Submit → `POST /api/orders`
+  (`postOrder`) dengan `idempotency_key`; backend membuat order, memvalidasi stok
+  dan total, lalu meminta Snap token Midtrans.
+- **Belum ada pemilihan kurir dan perhitungan ongkir** (Biteship belum
+  terintegrasi; `shipping_cost` = 0, data kurir kosong). Menjadi pekerjaan
+  berikutnya (lihat `docs/BACKLOG.md`).
+- **LIVE**.
 
-### `/checkout/payment` — Metode pembayaran
-- Client Component. Tampilan meniru Midtrans Snap (VA/E-Wallet/QRIS/Kartu),
-  tapi **tidak ada payment gateway asli**. QRIS meng-encode string dummy
-  `"SIMULATED-ORDER-DO-NOT-SCAN"` — sengaja tidak bisa dipindai untuk
-  transaksi nyata.
-- **LIVE (UI), SIMULASI (data)**.
+### `/checkout/payment` — Pembayaran
+- Client Component. Membuka Midtrans Snap popup memakai token dari langkah
+  sebelumnya (production). Tidak ada UI pemilihan metode buatan sendiri; metode
+  dipilih di dalam Snap.
+- **LIVE**.
 
 ### `/checkout/success` — Konfirmasi pesanan
-- Nomor order dibuat client-side (timestamp + random) lewat query param
-  `?order=`, **tidak ada order yang tersimpan ke database**. Cart di-reset
-  saat halaman ini dimuat.
-- **LIVE (UI), SIMULASI (data)**.
+- Menampilkan nomor order dari backend (`?order=`). Status akhir pembayaran
+  ditentukan webhook Midtrans, bukan halaman ini. Belum ada email konfirmasi ke
+  pembeli.
+- **LIVE**.
+
+### `/kontak` — Kontak
+- Server Component, `force-dynamic`. Seluruh isi (WhatsApp, alamat, email,
+  telepon, kanal sosial) dikelola dari admin lewat CMS; field kosong tidak
+  ditampilkan. Tombol WhatsApp mengambang tampil di layout `(main)`.
+- **LIVE**.
+
+### `/shop-segera` — Shop ditutup (dormant)
+- Tujuan redirect `proxy.ts` untuk `/shop`, `/cart`, `/checkout` bila
+  `NEXT_PUBLIC_SHOP_OPEN` bukan `true`. Saat ini tidak tampil di production.
 
 ### `/info` — Link-in-bio
 - Server Component, berdiri sendiri (di luar route group `(main)`) — **tidak
   mewarisi SiteHeader/SiteFooter/cart**. Dibuka lewat bio Instagram.
-- Isi: logo, 1 foto produk, tagline, 4 tombol (Website Utama — **disabled**,
-  WhatsApp, Shopee, TikTok — 3 tombol terakhir aktif `<a target="_blank">`).
+- Isi: logo, 1 foto produk, tagline, 4 tombol (Website Utama — **masih
+  disabled**, WhatsApp, Shopee, TikTok — 3 tombol terakhir aktif
+  `<a target="_blank">`).
 - Link WhatsApp & Shopee dari brief client; **link TikTok masih placeholder**
   (`@velcroethereal`, belum dikonfirmasi client — lihat komentar di kode).
-- **LIVE**, tombol "Website Utama" sengaja **DISABLED** (badge "Coming Soon")
-  karena situs utama masih dianggap prototipe/simulasi.
+- **LIVE**. Tombol "Website Utama" masih **DISABLED** (badge "Coming Soon").
+  Alasan awalnya (situs utama masih simulasi) sudah tidak berlaku sejak
+  checkout live, tetapi tombol sengaja belum dibuka sampai ongkir dan email
+  konfirmasi selesai dan situs siap dipublikasikan ke media (lihat
+  `docs/BACKLOG.md`).
 
 ### `/coming-soon` — Gate produksi
 - Server Component, berdiri sendiri (di luar route group `(main)`).
 - Halaman "segera hadir" — di-redirect otomatis ke sini dari seluruh route
-  `(main)` (`/`, `/shop`, `/shop/*`, `/cart`, `/checkout`, `/checkout/*`) lewat
+  `(main)` (`/`, `/shop`, `/shop/*`, `/cart`, `/checkout`, `/checkout/*`, `/kontak`) lewat
   `src/proxy.ts` (nama baru untuk `middleware.ts` di Next.js 16), **HANYA
   saat** `NODE_ENV=production` DAN `NEXT_PUBLIC_SITE_LIVE !== "true"`.
 - Di **dev lokal (`npm run dev`), gate ini tidak pernah aktif** — semua route
   `(main)` bisa diakses langsung.
 - CTA satu-satunya: "More Info" → `/info`.
-- **LIVE**.
+- **Dormant di production sekarang** (`SITE_LIVE=true`); tetap berfungsi bila
+  dibutuhkan lagi.
 
 ---
 
@@ -104,12 +125,12 @@ halaman di bawah).
 
 Untuk konteks scope penuh (lihat `docs/SOT.md`), fitur-fitur berikut
 direncanakan tapi **belum punya `page.tsx`**:
-- Login/register, riwayat order, wishlist (Autentikasi & Akun)
+- Login/register, riwayat order, wishlist (Autentikasi & Akun) — sengaja
+  guest-only dulu; skema akun pembeli menunggu keputusan owner
 - Search & filter produk (kategori, ukuran, warna, rentang harga)
 - Halaman konten: About Us, Size Guide, Kebijakan Retur, Privacy Policy,
-  Kontak & FAQ
-- Admin panel (Filament — terpisah dari `apps/web`, belum ada implementasi
-  yang teramati di repo ini)
+  Syarat & Ketentuan, FAQ (hanya `/kontak` yang sudah ada). Privacy Policy dan
+  S&K disyaratkan Midtrans.
 
 Jangan asumsikan halaman-halaman ini "hampir jadi" — mereka **tidak ada sama
 sekali** di kode saat ini.

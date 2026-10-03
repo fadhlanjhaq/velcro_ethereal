@@ -80,6 +80,7 @@ Usia 24–45: pengusaha, kreatif profesional, kolektor fashion, dan pecinta seni
 ## 5. Modul & Fitur
 
 ### 5.1 Autentikasi & Akun
+- *Status: sengaja guest-only dulu; skema akun pembeli (termasuk diskon) menunggu keputusan owner.*
 - Register & login (email + password)
 - **Guest checkout diperbolehkan** — akun bersifat opsional, tidak menjadi syarat wajib untuk membeli
 - Session management (Laravel Sanctum untuk auth antara Next.js ↔ Laravel API)
@@ -102,13 +103,14 @@ Usia 24–45: pengusaha, kreatif profesional, kolektor fashion, dan pecinta seni
 ### 5.4 Pembayaran
 - Integrasi Midtrans — channel: QRIS, Virtual Account, e-wallet, kartu kredit/cicilan
 - Webhook untuk update status pembayaran otomatis (tanpa konfirmasi manual admin)
-- Invoice otomatis per order
+- Invoice otomatis per order *(belum ada per Oktober 2026 — lihat `docs/BACKLOG.md`)*
 - **Status (Oktober 2026):** checkout Midtrans Snap + webhook sudah live di production dan terverifikasi dengan transaksi uji. Detail keputusan: `docs/decisions/payments-midtrans.md`; alur rilis: `docs/deploy.md`.
 
 ### 5.5 Pengiriman
 - Kalkulasi ongkir otomatis (multi-kurir: JNE, J&T, SiCepat, dll via Biteship)
 - Status tracking resi terintegrasi
 - Notifikasi email saat status order berubah (diproses → dikirim → selesai)
+- **Status (Oktober 2026):** belum dikerjakan. Ongkir Biteship belum ada (ongkir Rp 0, kurir kosong) dan email belum ada. Antrian: `docs/BACKLOG.md`.
 
 ### 5.6 Admin Panel (Filament)
 - **Base tier: single admin** (owner pegang semua akses)
@@ -128,8 +130,8 @@ Usia 24–45: pengusaha, kreatif profesional, kolektor fashion, dan pecinta seni
 ### 5.8 Keamanan & Compliance
 - HTTPS/SSL wajib (disyaratkan payment gateway)
 - Password di-hash (bcrypt/argon2 — standar Laravel)
-- Backup database otomatis harian (bagian dari paket maintenance)
-- Rate limiting pada API publik untuk mencegah abuse
+- Backup database otomatis harian (bagian dari paket maintenance) *(belum ada konfigurasi di repo per Oktober 2026)*
+- Rate limiting pada API publik untuk mencegah abuse *(belum ada per Oktober 2026)*
 
 ---
 

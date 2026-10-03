@@ -8,7 +8,7 @@ This is a monorepo containing:
 
 - **`apps/web`** — Storefront built with Next.js (App Router), TypeScript, and Tailwind CSS.
 - **`apps/api`** — Backend API built with Laravel 13 (PHP 8.4).
-- **`docs`** — Project documentation.
+- **`docs`** — Project documentation. Mulai dari `docs/BACKLOG.md` (antrian kerja), `docs/MILESTONES.md` (riwayat), `docs/deploy.md` (rilis production), `docs/SOT.md` (scope produk).
 
 ```
 velcro-ethereal/
@@ -56,7 +56,7 @@ npm run dev
 
 ### Yang dijalankan
 
-Satu Nginx reverse proxy jadi single entry point di `http://localhost` (port 80):
+Satu Nginx reverse proxy jadi single entry point di `http://localhost:8080` (port 80 host dihindari karena bentrok dengan Herd; proxy di-bind ke `127.0.0.1:8080`):
 
 | Path        | Diarahkan ke                              |
 | ----------- | ----------------------------------------- |
@@ -94,10 +94,10 @@ docker compose down -v
 
 ```bash
 # Storefront Next.js (via proxy) — harus balas 200 + HTML
-curl -i http://localhost/
+curl -i http://localhost:8080/
 
 # Health check Laravel (via proxy → php-fpm) — harus balas 200
-curl -i http://localhost/up
+curl -i http://localhost:8080/up
 
 # Status tiap container (semua "running", db & redis "healthy")
 docker compose ps

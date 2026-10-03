@@ -14,10 +14,13 @@ seeder supaya tidak ada kejutan bentuk data saat swap ke API asli.
 
 ## Status saat laporan ini dibuat
 
-Database lokal (MySQL via DBngin, `127.0.0.1:3311`) **sedang tidak berjalan**
-saat pengecekan ini (`Connection refused`) — lihat catatan di
-`screenshots/README.md`. Isi di bawah diambil dari **membaca kode seeder
-langsung**, bukan dari query live ke DB.
+Isi di bawah diambil dari **membaca kode seeder** (`HeritageCollectionSeeder`,
+`CategorySeeder`), bukan dari query ke DB production. Sejak admin Filament
+aktif (Milestone 9b), produk, harga, stok, dan foto di production **bisa sudah
+diubah lewat admin** dan tidak harus sama dengan seeder. Perlakukan angka harga
+dan stok di bawah sebagai data awal, bukan kondisi live; cek `/admin` atau
+`GET /api/products` untuk data sebenarnya. Teks landing dan halaman kontak
+dikelola lewat Site Content CMS (`SiteContentSeeder` untuk nilai awal).
 
 ---
 

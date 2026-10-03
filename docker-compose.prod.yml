@@ -11,8 +11,8 @@
 #
 #   1. web / api pull PREBUILT images from GHCR instead of building on the box.
 #      The VPS has 957 Mi RAM and 2 cores; `npm run build` for Next.js there is
-#      a reliable way to get OOM-killed. Images are built elsewhere (CI) and
-#      only pulled here.
+#      a reliable way to get OOM-killed. Images are built on the developer's Mac and
+#      pushed to GHCR (see docs/deploy.md); the box only pulls them.
 #
 #   2. mem_limit on every service. Previously these lived ONLY as uncommitted
 #      edits in the VPS working tree, so any `git checkout`/`reset` silently

@@ -51,16 +51,15 @@ Keputusan kunci:
 Isu & fix:
 - **Port 80 host bentrok dengan Herd** → mapping port proxy diubah dari `80:80`
   menjadi `8080:80` di `docker-compose.yml`, sehingga stack diakses di
-  `http://localhost:8080`. (Perubahan ini ada di working tree; catatan: bagian
-  "Validasi Pra-Deploy" di `README.md` masih menyebut port 80 dan perlu
-  disinkronkan.)
-- **500 error di endpoint `/up`** → **root cause tidak terdokumentasi di commit,
-  perlu konfirmasi manual dari developer.** Tidak ada commit message atau diff
-  yang menjelaskan penyebab maupun perbaikannya. Satu-satunya sinyal terkait
-  adalah perubahan working-tree pada `apps/api/composer.json` yang menambahkan
-  `laravel/pail` ke `extra.laravel.dont-discover` (mencegah auto-discovery paket
-  dev-only saat `composer install --no-dev`); namun tidak ada catatan yang
-  mengonfirmasi ini sebagai fix untuk 500 tersebut, jadi ini **belum terverifikasi**.
+  `http://localhost:8080` (kemudian di-bind ke `127.0.0.1:8080` saja, lihat
+  Milestone 9c). Bagian "Validasi Pra-Deploy" di `README.md` sudah disinkronkan
+  ke port 8080 (3 Oktober 2026).
+- **500 error di endpoint `/up`** → penyebabnya `laravel/pail` (paket dev-only)
+  ikut ter-discover saat `composer install --no-dev` di image. Diperbaiki dengan
+  menambahkan `laravel/pail` ke `extra.laravel.dont-discover` di
+  `apps/api/composer.json` (commit `240b6df`, pesan commit menyebut "resolves /up
+  500 in Docker"). Catatan: awalnya fix ini tidak dicatat di sini; dikonfirmasi
+  dari riwayat git pada 3 Oktober 2026.
 
 ---
 
@@ -697,6 +696,51 @@ kedua jalur mengonfirmasi replay bekerja tanpa logic tambahan terpisah.
 
 ---
 
+## Milestone 9b — Admin Filament, Site Content CMS, Halaman /kontak
+**Tanggal:** 9–13 Agustus 2026 (dicatat belakangan pada 3 Oktober 2026)
+**Status:** Selesai (live di production)
+
+Dicatat belakangan: pekerjaan ini sudah ada di git history tetapi belum pernah
+masuk dokumen ini.
+
+- **Admin panel Filament 5** di `/admin` (`apps/api`): resource Produk,
+  Kategori, dan Order (pembuatan order dari admin sengaja dimatikan; order
+  hanya lahir dari checkout). Akses panel dibatasi ke email admin
+  (commit `75db8d4`). Ekstensi PHP `intl` dan `zip` ditambahkan ke image api
+  karena dibutuhkan Filament.
+- **Foto produk dilayani dari storage Laravel** (upload lewat admin), bukan lagi
+  hanya aset statis di frontend.
+- **Site Content CMS**: tabel `site_contents` + halaman admin "Manage Site
+  Content", endpoint publik `GET /api/site-content`. Section landing page
+  (hero, brand story, dst.) dan section **contact** dikelola dari admin;
+  frontend memakai `getSiteContent()` (`revalidate: 60`).
+- **Halaman `/kontak`** + tombol WhatsApp mengambang. Isi kontak (WhatsApp,
+  alamat, email, telepon, kanal sosial) sepenuhnya dari CMS; field yang kosong
+  tidak ditampilkan. Dipaksa `force-dynamic` agar `next build` tidak memanggil
+  API saat prerender.
+- Dropdown "Collections" di header diperbaiki dan diberi panel kaca; Lenis dan
+  ScrollTrigger disinkronkan ulang saat pindah route.
+
+---
+
+## Milestone 9c — Deploy Production Pertama (VPS)
+**Tanggal:** 13–14 Agustus 2026 (dicatat belakangan pada 3 Oktober 2026)
+**Status:** Selesai
+
+- `docker-compose.prod.yml` sebagai override di atas `docker-compose.yml`: image
+  `web`/`api` ditarik dari GHCR (tidak dibangun di VPS 957 Mi), `mem_limit`
+  per service, `docker/mysql/my.cnf` untuk MySQL hemat memori, volume
+  `storage_public` agar upload media bertahan saat container dibuat ulang
+  (butuh `artisan storage:link` sekali).
+- Nginx proxy meneruskan `/admin`, `/filament`, dan Livewire ke Laravel; port
+  proxy di-bind ke `127.0.0.1:8080` (host nginx di depan yang menangani SSL);
+  PHP-FPM diberi tahu bahwa request HTTPS setelah TLS termination.
+- `NEXT_PUBLIC_SITE_LIVE` diterima sebagai build-arg `apps/web`; host production
+  diizinkan untuk `next/image` pada URL storage.
+- Alur rilis lengkap: `docs/deploy.md`.
+
+---
+
 ## Milestone 10 — Integrasi Midtrans Snap & Pembukaan Kembali Shop
 **Tanggal:** 3 Oktober 2026
 **Status:** Selesai (live di production, diverifikasi transaksi uji)
@@ -739,6 +783,7 @@ di admin Filament.
 
 Batasan / belum dikerjakan: known limitations di
 `docs/decisions/payments-midtrans.md` §3 (mis. rate limiting, refund manual,
-rekonsiliasi transaksi nyangkut) tetap berlaku. `docs/design-handoff/` belum
-di-commit saat milestone ini ditulis. Tidak ada key atau isi `.env` yang
+rekonsiliasi transaksi nyangkut) tetap berlaku. `docs/design-handoff/` di-commit
+setelahnya (`12f71f4`) dan sudah disinkronkan dengan kondisi production pada
+3 Oktober 2026. Tidak ada key atau isi `.env` yang
 dicatat di dokumentasi mana pun.
