@@ -56,20 +56,24 @@ Catatan: ini menggantikan simulasi frontend di Milestone 6 yang menampilkan
 radio-card VA / E-Wallet / QRIS / Kartu buatan sendiri. Simulasi itu bukan acuan
 alur produksi.
 
-### 1.3 `shipping_cost` di-hardcode `0` (sementara)
+### 1.3 Ongkir nyata dari Biteship (dulu di-hardcode `0`)
 
-`OrderController` menetapkan `shipping_cost = 0` dan `total = subtotal`. Biteship
-(API ongkir) belum terintegrasi, konsisten dengan catatan yang sudah ada di
-`apps/web/src/app/(main)/checkout/page.tsx`.
+Sampai Langkah C integrasi Biteship, `OrderController` menetapkan
+`shipping_cost = 0` dan `total = subtotal`; semua order production sebelum
+rilis itu tercatat dengan ongkir Rp 0 dan tanpa data kurir.
 
-**Wajib diganti** begitu Biteship terintegrasi — ongkir nyata harus masuk ke
-`total`, dan (kalau dipakai) ditambahkan sebagai baris tersendiri di
-`item_details` Midtrans supaya `sum(item_details) == gross_amount` tetap terjaga.
-Ada `TODO(biteship)` di kode pada titik ini.
+**Sejak Langkah C (selesai di kode, Oktober 2026)** ongkir tidak lagi 0:
+`OrderController` menghitung ulang ongkir layanan pilihan pembeli di backend,
+dan `total = subtotal + shipping_cost + service_fee`. Ongkir masuk sebagai baris
+`SHIPPING` di `item_details` Midtrans (plus `SERVICE_FEE` kalau biaya layanan >
+0), sehingga `sum(item_details) == gross_amount` (§2.2) tetap terjaga. Kalau
+angka yang dilihat pembeli berbeda dari hasil hitung ulang, order ditolak 422.
+`TODO(biteship)` di kode sudah dihapus.
 
-**Status (Oktober 2026):** ini akibat langsung di production — semua order
-tercatat dengan ongkir Rp 0 dan data kurir/jasa kirim kosong. Menjadi pekerjaan
-berikutnya dan **harus selesai sebelum situs dipublikasikan ke media**.
+Detail keputusan, urutan validasi, dan data yang disimpan ada di
+`docs/decisions/shipping-biteship.md` (§1.6, §1.7, §3 C). Berlaku di production
+setelah Langkah B + C dirilis bersamaan (lihat Checklist Pra-Deploy di dokumen
+itu).
 
 ### 1.4 Guest checkout only
 

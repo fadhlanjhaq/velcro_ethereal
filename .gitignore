@@ -49,3 +49,5 @@ yarn-error.log*
 .zed
 .cursor/
 .codex
+docker-compose.override.yml
+docker/nginx/nginx.local.conf

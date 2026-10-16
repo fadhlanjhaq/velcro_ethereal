@@ -3,6 +3,7 @@
 use App\Http\Controllers\MidtransWebhookController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ShippingController;
 use App\Http\Controllers\SiteContentController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,6 +25,14 @@ Route::get('/site-content', [SiteContentController::class, 'index']);
 // Checkout: buat order dari cart + minta Snap token Midtrans. Publik (guest
 // checkout), tanpa middleware — konsisten dengan route di atas.
 Route::post('/orders', [OrderController::class, 'store']);
+
+// Ongkir (Biteship): autocomplete area tujuan + cek tarif kurir. Publik (guest
+// checkout), tapi WAJIB throttle per IP — tiap request yang lolos cache memicu
+// panggilan Biteship berbayar. Limiter didefinisikan di AppServiceProvider.
+Route::get('/shipping/areas', [ShippingController::class, 'areas'])
+    ->middleware('throttle:shipping-areas');
+Route::post('/shipping/rates', [ShippingController::class, 'rates'])
+    ->middleware('throttle:shipping-rates');
 
 // Payment notification dari Midtrans (server-to-server, bukan browser). Publik,
 // tanpa middleware — keasliannya diverifikasi lewat signature di controller.

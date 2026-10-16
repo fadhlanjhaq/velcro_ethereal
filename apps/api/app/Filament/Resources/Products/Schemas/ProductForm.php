@@ -44,6 +44,16 @@ class ProductForm
                     ->numeric()
                     ->minValue(0)
                     ->prefix('Rp'),
+                // Wajib di form supaya produk baru/yang diedit selalu punya
+                // berat; kolomnya tetap nullable di DB untuk produk lama.
+                TextInput::make('weight_grams')
+                    ->label('Berat (gram)')
+                    ->required()
+                    ->numeric()
+                    ->integer()
+                    ->minValue(1)
+                    ->suffix('gram')
+                    ->helperText('Dipakai untuk menghitung ongkir. Isi berat produk ditambah kemasannya.'),
                 Textarea::make('description')
                     ->label('Deskripsi')
                     ->required()

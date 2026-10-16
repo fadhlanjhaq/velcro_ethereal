@@ -30,6 +30,12 @@ class ProductsTable
                     ->label('Harga dasar')
                     ->money('IDR')
                     ->sortable(),
+                // Produk tanpa berat ditolak saat cek ongkir, jadi tandai jelas.
+                TextColumn::make('weight_grams')
+                    ->label('Berat')
+                    ->suffix(' gram')
+                    ->placeholder('Belum diisi')
+                    ->sortable(),
                 TextColumn::make('variants_count')
                     ->label('Varian')
                     ->counts('variants'),

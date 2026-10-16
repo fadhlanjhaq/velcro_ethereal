@@ -217,7 +217,21 @@ export interface CreateOrderPayload {
   guest_name: string;
   guest_email: string;
   phone: string;
-  address: string;
+  /** Jalan, nomor rumah, RT/RW, patokan (maks 500). */
+  address_detail: string;
+  /** Opsional (maks 200); `null` kalau kosong. */
+  courier_note: string | null;
+  /** ID area dari GET /api/shipping/areas — satu-satunya yang menentukan tarif. */
+  destination_area_id: string;
+  /** Label & kode pos area: hanya data tampilan untuk admin/kurir. */
+  area_label: string;
+  postal_code: string | null;
+  courier_code: string;
+  service_code: string;
+  /** Ongkir & total yang DILIHAT pembeli — backend menolak order kalau
+   *  hasil hitung ulangnya berbeda, bukan memakainya sebagai nominal. */
+  expected_shipping_cost: number;
+  expected_total: number;
   items: { product_variant_id: number; quantity: number }[];
 }
 
@@ -229,6 +243,34 @@ export interface CreatedOrder {
 }
 
 /**
+ * `code` di body 422 POST /api/orders saat angka yang dilihat pembeli tidak
+ * lagi cocok dengan hitung ulang backend (App\Exceptions\CheckoutQuoteChangedException).
+ * Order TIDAK dibuat; halaman checkout memuat ulang tarif dan pembeli bisa
+ * submit lagi dengan idempotency key yang sama.
+ */
+export type CheckoutQuoteErrorCode =
+  | "shipping_unavailable"
+  | "shipping_cost_changed"
+  | "total_changed";
+
+/**
+ * Error dari POST /api/orders. `message` tetap siap tampil seperti sebelumnya;
+ * `status` dan `code` (kalau backend mengirimnya) dipakai halaman checkout
+ * untuk bereaksi, mis. memuat ulang tarif pada CheckoutQuoteErrorCode.
+ */
+export class OrderError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(status: number, message: string, code?: string) {
+    super(message);
+    this.name = "OrderError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/**
  * Buat order dari isi cart + minta Snap token Midtrans (backend yang bicara ke
  * Midtrans). Dipanggil saat submit form /checkout.
  *
@@ -237,37 +279,189 @@ export interface CreatedOrder {
  * gross_amount } }`, jadi `res.ok` (true untuk 200 & 201) menangani keduanya.
  *
  * Backend sudah mengembalikan pesan error berbahasa Indonesia yang layak
- * ditampilkan ke user:
- * - 422 → validasi / stok tidak cukup / produk nonaktif (`body.message` apa adanya)
+ * ditampilkan ke user (semua dilempar sebagai OrderError):
+ * - 422 → validasi / stok tidak cukup / produk nonaktif / berat kosong
+ *   (`body.message` apa adanya), atau ongkir/total berubah (`body.code` =
+ *   CheckoutQuoteErrorCode)
  * - 409 → order dengan key ini masih diproses (`body.message` apa adanya)
- * - 502 → gagal menghubungi payment gateway (`body.message` generik)
+ * - 502 → gagal menghubungi payment gateway / Biteship (`body.message` generik)
  */
 export async function postOrder(payload: CreateOrderPayload): Promise<CreatedOrder> {
   const res = await fetch(apiUrl("/api/orders"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(payload),
     cache: "no-store",
   });
 
   if (!res.ok) {
-    // Coba ambil pesan dari body; kalau body bukan JSON, fallback ke pesan generik.
-    const message = await res
+    // Coba ambil pesan + code dari body; kalau body bukan JSON, fallback ke pesan generik.
+    const body = await res
       .json()
-      .then((body: { message?: string }) => body?.message)
+      .then((b: { message?: string; code?: string }) => b)
       .catch(() => undefined);
+    const message = body?.message;
 
     if (
       (res.status === 422 || res.status === 409 || res.status === 502) &&
       message
     ) {
-      throw new Error(message);
+      throw new OrderError(res.status, message, body?.code);
     }
-    throw new Error(message ?? `Gagal membuat order (HTTP ${res.status}).`);
+    throw new OrderError(
+      res.status,
+      message ?? `Gagal membuat order (HTTP ${res.status}).`,
+      body?.code,
+    );
   }
 
   const json = (await res.json()) as Envelope<CreatedOrder>;
   return json.data;
+}
+
+/** Satu area tujuan dari GET /api/shipping/areas (App\Services\Shipping\ShippingArea). */
+export interface ShippingArea {
+  id: string;
+  /** Label lengkap siap tampil (kelurahan, kecamatan, kota, provinsi, kode pos). */
+  label: string;
+  postal_code: string | null;
+}
+
+/** Satu opsi tarif dari POST /api/shipping/rates (App\Services\Shipping\ShippingRate). */
+export interface ShippingRate {
+  courier_code: string;
+  courier_name: string;
+  service_code: string;
+  service_name: string;
+  /** Rupiah bulat. */
+  cost: number;
+  /** Estimasi mentah dari Biteship, mis. "1 - 2 days". */
+  etd: string | null;
+  description: string | null;
+}
+
+/** Payload POST /api/shipping/rates (lihat App\Http\Requests\ShippingRatesRequest). */
+export interface ShippingRatesPayload {
+  destination_area_id: string;
+  items: { product_variant_id: number; quantity: number }[];
+}
+
+/**
+ * `true` kalau error berasal dari AbortController (request lama dibatalkan
+ * karena pembeli mengetik lagi / area berubah). Bukan kegagalan — pemanggil
+ * cukup mengabaikannya, jangan tampilkan ke pembeli.
+ */
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
+/**
+ * Ubah response gagal endpoint ongkir jadi Error dengan pesan siap tampil.
+ * Pola sama dengan postOrder: 422/502 → `body.message` dari backend (sudah
+ * berbahasa Indonesia); 429 → pesan throttle sendiri karena body bawaan
+ * Laravel ("Too Many Attempts.") berbahasa Inggris; lainnya → pesan generik.
+ */
+async function shippingError(res: Response, fallback: string): Promise<Error> {
+  if (res.status === 429) {
+    return new Error("Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.");
+  }
+
+  const message = await res
+    .json()
+    .then((body: { message?: string }) => body?.message)
+    .catch(() => undefined);
+
+  if ((res.status === 422 || res.status === 502) && message) {
+    return new Error(message);
+  }
+  return new Error(`${fallback} (HTTP ${res.status}).`);
+}
+
+/**
+ * Autocomplete area tujuan. Backend memvalidasi `q` minimal 3 karakter dan
+ * meng-cache hasilnya; pemanggil tetap wajib debounce + membatalkan request
+ * lama (`signal`) karena setiap cache miss memicu panggilan Biteship berbayar.
+ *
+ * AbortError dibiarkan lolos apa adanya (cek dengan `isAbortError`).
+ */
+export async function searchShippingAreas(
+  q: string,
+  signal?: AbortSignal,
+): Promise<ShippingArea[]> {
+  const res = await fetch(
+    apiUrl(`/api/shipping/areas?q=${encodeURIComponent(q)}`),
+    { cache: "no-store", signal },
+  );
+
+  if (!res.ok) {
+    throw await shippingError(res, "Gagal mencari area");
+  }
+
+  const json = (await res.json()) as Envelope<ShippingArea[]>;
+  return json.data;
+}
+
+/** Harga satu baris cart menurut backend (meta.items POST /api/shipping/rates). */
+export interface ShippingQuoteItem {
+  product_variant_id: number;
+  /** Harga satuan efektif dari DB (price_override ?? base_price), rupiah bulat. */
+  unit_price: number;
+  quantity: number;
+  line_total: number;
+}
+
+/**
+ * Hasil POST /api/shipping/rates:
+ * `{ data: ShippingRate[], meta: { service_fee, items, subtotal } }`.
+ *
+ * `items` & `subtotal` = harga produk TERBARU dari DB, dihitung dengan rumus
+ * yang sama dengan POST /api/orders. Ringkasan checkout memakai angka ini
+ * (bukan harga yang tersimpan di cart), jadi "Total Tagihan" = gross_amount.
+ */
+export interface ShippingQuote {
+  rates: ShippingRate[];
+  /** Biaya layanan per order (rupiah bulat, config SERVICE_FEE). 0 = tidak
+   *  ditampilkan dan tidak ditagih. Ikut di total supaya rumusnya sama
+   *  dengan backend: subtotal + ongkir + biaya layanan. */
+  serviceFee: number;
+  items: ShippingQuoteItem[];
+  /** Rupiah bulat — identik dengan subtotal yang dihitung saat order dibuat. */
+  subtotal: number;
+}
+
+/**
+ * Tarif kurir ke area tujuan untuk isi cart. Sudah difilter allowlist layanan
+ * dan diurutkan dari ongkir termurah oleh backend — lewat jalur yang sama
+ * dengan hitung ulang di POST /api/orders. Harga & berat dihitung backend dari
+ * DB — yang dikirim hanya variant id + qty.
+ *
+ * AbortError dibiarkan lolos apa adanya (cek dengan `isAbortError`).
+ */
+export async function getShippingRates(
+  payload: ShippingRatesPayload,
+  signal?: AbortSignal,
+): Promise<ShippingQuote> {
+  const res = await fetch(apiUrl("/api/shipping/rates"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+    signal,
+  });
+
+  if (!res.ok) {
+    throw await shippingError(res, "Gagal mengambil ongkir");
+  }
+
+  const json = (await res.json()) as Envelope<ShippingRate[]> & {
+    meta: { service_fee: number; items: ShippingQuoteItem[]; subtotal: number };
+  };
+  return {
+    rates: json.data,
+    serviceFee: json.meta.service_fee,
+    items: json.meta.items,
+    subtotal: json.meta.subtotal,
+  };
 }
 
 /**
