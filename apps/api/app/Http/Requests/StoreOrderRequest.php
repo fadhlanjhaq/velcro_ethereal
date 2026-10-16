@@ -55,6 +55,11 @@ class StoreOrderRequest extends FormRequest
             // Angka yang dilihat pembeli — pembanding, bukan sumber nominal.
             'expected_shipping_cost' => ['required', 'integer', 'min:0'],
             'expected_total' => ['required', 'integer', 'min:1'],
+            // Asuransi pengiriman (Langkah D1): opsional, dipilih & dibayar
+            // pembeli. expected_insurance_fee = biaya yang DILIHAT pembeli —
+            // pembanding, sama seperti expected_shipping_cost.
+            'with_insurance' => ['required', 'boolean'],
+            'expected_insurance_fee' => ['required_if:with_insurance,true', 'nullable', 'integer', 'min:0'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_variant_id' => ['required', 'integer', 'exists:product_variants,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],

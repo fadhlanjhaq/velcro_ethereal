@@ -9,11 +9,16 @@ namespace App\Services\Shipping;
  * - `providerCost` — tarif ASLI dari Biteship. Yang dibayar toko ke Biteship
  *   saat booking kurir (Langkah D). Tidak pernah dikirim ke frontend.
  * - `cost` — ongkir yang DITAMPILKAN dan DITAGIH ke pembeli
- *   = providerCost + markup (config services.checkout.shipping_markup).
+ *   = providerCost + markup (ShippingSettings::shippingMarkup()).
  *   Selisihnya margin toko untuk menutup biaya Rates API.
  *
  * Keduanya rupiah bulat — sama dengan satuan gross_amount Midtrans, supaya
- * ongkir bisa langsung jadi baris item_details tanpa pembulatan.
+ * ongkir bisa langsung jadi baris item_details tanpa pembulatan. Keduanya juga
+ * ongkir DASAR, tanpa asuransi.
+ *
+ * Asuransi (Langkah D1, opsional, dibayar pembeli): `insuranceAvailable` +
+ * `insuranceFee` apa adanya dari Biteship, TIDAK kena markup. Ikut di
+ * toArray()/fromArray(), jadi ikut ter-cache bersama tarifnya.
  */
 final readonly class ShippingRate
 {
@@ -26,6 +31,8 @@ final readonly class ShippingRate
         public ?string $etd,
         public ?string $description,
         public int $providerCost,
+        public bool $insuranceAvailable = false,
+        public int $insuranceFee = 0,
     ) {}
 
     /**
@@ -36,7 +43,10 @@ final readonly class ShippingRate
      * Cache menyimpan tarif SEBELUM markup, jadi `cost` di cache = tarif asli
      * dan menjadi providerCost. Markup dipasang sesudahnya lewat withMarkup().
      *
-     * @param  array{courier_code: string, courier_name: string, service_code: string, service_name: string, cost: int, etd: string|null, description: string|null}  $data
+     * Entri cache lama (sebelum D1) tidak punya field asuransi → dianggap
+     * tidak tersedia.
+     *
+     * @param  array{courier_code: string, courier_name: string, service_code: string, service_name: string, cost: int, etd: string|null, description: string|null, insurance_available?: bool, insurance_fee?: int}  $data
      */
     public static function fromArray(array $data): self
     {
@@ -49,12 +59,15 @@ final readonly class ShippingRate
             etd: $data['etd'] ?? null,
             description: $data['description'] ?? null,
             providerCost: (int) $data['cost'],
+            insuranceAvailable: (bool) ($data['insurance_available'] ?? false),
+            insuranceFee: (int) ($data['insurance_fee'] ?? 0),
         );
     }
 
     /**
      * Salinan dengan `cost` = providerCost + markup. Selalu dihitung dari
-     * providerCost (bukan dari cost), jadi aman dipanggil berulang.
+     * providerCost (bukan dari cost), jadi aman dipanggil berulang. Asuransi
+     * tidak disentuh — markup hanya untuk ongkir.
      */
     public function withMarkup(int $markup): self
     {
@@ -67,6 +80,8 @@ final readonly class ShippingRate
             etd: $this->etd,
             description: $this->description,
             providerCost: $this->providerCost,
+            insuranceAvailable: $this->insuranceAvailable,
+            insuranceFee: $this->insuranceFee,
         );
     }
 
@@ -75,7 +90,7 @@ final readonly class ShippingRate
      * disimpan di cache (dipanggil sebelum markup, jadi `cost` = tarif asli).
      * providerCost sengaja TIDAK ikut: pembeli cukup tahu ongkir yang ditagih.
      *
-     * @return array{courier_code: string, courier_name: string, service_code: string, service_name: string, cost: int, etd: string|null, description: string|null}
+     * @return array{courier_code: string, courier_name: string, service_code: string, service_name: string, cost: int, etd: string|null, description: string|null, insurance_available: bool, insurance_fee: int}
      */
     public function toArray(): array
     {
@@ -87,6 +102,8 @@ final readonly class ShippingRate
             'cost' => $this->cost,
             'etd' => $this->etd,
             'description' => $this->description,
+            'insurance_available' => $this->insuranceAvailable,
+            'insurance_fee' => $this->insuranceFee,
         ];
     }
 }

@@ -53,6 +53,25 @@ final class CheckoutPricing
     }
 
     /**
+     * Nilai pertanggungan asuransi (rupiah bulat) = Σ harga satuan bulat × qty —
+     * persis nilai `courier_insurance` yang dikirim ke Biteship
+     * (Σ item.value × quantity di BiteshipShippingProvider), dan yang dikirim
+     * lagi saat booking (Langkah D2).
+     *
+     * @param  array<int, array{price: float, quantity: int}>  $lines
+     */
+    public static function insuranceValue(array $lines): int
+    {
+        $total = 0;
+
+        foreach ($lines as $line) {
+            $total += self::toRupiah($line['price']) * (int) $line['quantity'];
+        }
+
+        return $total;
+    }
+
+    /**
      * Pembulatan ke rupiah bulat — sama dengan gross_amount Midtrans.
      */
     public static function toRupiah(float $amount): int

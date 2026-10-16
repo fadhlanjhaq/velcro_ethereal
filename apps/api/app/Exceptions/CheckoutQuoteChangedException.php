@@ -9,7 +9,8 @@ use RuntimeException;
 /**
  * Dilempar dari OrderController saat angka yang dilihat pembeli di /checkout
  * tidak lagi sama dengan hasil hitung ulang backend: layanan kurir hilang /
- * di luar allowlist, ongkir berubah, atau total berubah.
+ * di luar allowlist, ongkir berubah, asuransi tidak tersedia / biayanya
+ * berubah, atau total berubah.
  *
  * Keputusan bisnis: pembeli TIDAK BOLEH ditagih angka yang berbeda dari yang
  * dilihatnya, jadi order ditolak (bukan disesuaikan diam-diam) dan frontend
@@ -47,6 +48,23 @@ class CheckoutQuoteChangedException extends RuntimeException
             'Ongkir berubah menjadi '.self::rupiah($shippingCost).'. Silakan periksa kembali pilihan pengiriman.',
             'shipping_cost_changed',
             ['shipping_cost' => $shippingCost],
+        );
+    }
+
+    public static function insuranceUnavailable(): self
+    {
+        return new self(
+            'Asuransi tidak tersedia untuk layanan pengiriman ini. Silakan pilih layanan lain atau lanjutkan tanpa asuransi.',
+            'insurance_unavailable',
+        );
+    }
+
+    public static function insuranceChanged(int $insuranceFee): self
+    {
+        return new self(
+            'Biaya asuransi berubah menjadi '.self::rupiah($insuranceFee).'. Silakan periksa kembali pesanan Anda.',
+            'insurance_changed',
+            ['insurance_fee' => $insuranceFee],
         );
     }
 

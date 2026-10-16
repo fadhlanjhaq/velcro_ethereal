@@ -17,7 +17,8 @@ use Illuminate\Support\Facades\Cache;
  * dengan yang ditampilkan — kecuali cache-nya sudah kedaluwarsa dan Biteship
  * memberi harga baru; kasus itu ditolak di OrderController (shipping_cost_changed).
  *
- * Markup ongkir (services.checkout.shipping_markup) dipasang SETELAH data
+ * Markup ongkir (ShippingSettings::shippingMarkup(), admin → cadangan .env
+ * SHIPPING_MARKUP) dipasang SETELAH data
  * dibaca dari cache: cache tetap berisi tarif asli Biteship, jadi perubahan
  * SHIPPING_MARKUP langsung berlaku tanpa menunggu TTL, dan tarif asli tetap
  * tersedia sebagai ShippingRate::$providerCost untuk booking di Langkah D.
@@ -34,6 +35,7 @@ class ShippingQuoteService
         private readonly ShippingItemsBuilder $itemsBuilder,
         private readonly ShippingProvider $provider,
         private readonly ShippingServiceAllowlist $allowlist,
+        private readonly ShippingSettings $settings,
     ) {}
 
     /**
@@ -53,9 +55,15 @@ class ShippingQuoteService
         $resolved = $this->itemsBuilder->resolve($lines);
         $items = $this->itemsBuilder->toProviderItems($resolved);
 
+        // `v` dinaikkan setiap bentuk data yang di-cache berubah. v2 (D1):
+        // request kini membawa courier_insurance dan tarif menyimpan field
+        // asuransi — entri lama tidak dipakai lagi.
         $cacheKey = 'shipping:rates:'.hash('sha256', json_encode([
-            'origin' => (string) config('services.biteship.origin.area_id'),
-            'couriers' => config('services.biteship.couriers'),
+            'v' => 2,
+            // Nilai EFEKTIF (admin → cadangan .env): mengganti area gudang /
+            // kurir di admin otomatis memakai entri cache baru.
+            'origin' => (string) $this->settings->origin()['area_id'],
+            'couriers' => $this->settings->couriers(),
             'destination' => $destinationAreaId,
             'items' => $items,
             'allowed_services' => $this->allowlist->entries(),
@@ -77,7 +85,7 @@ class ShippingQuoteService
 
         // Markup flat per order. Urutan termurah tidak berubah karena semua
         // layanan mendapat markup yang sama.
-        $markup = (int) config('services.checkout.shipping_markup');
+        $markup = $this->settings->shippingMarkup();
 
         $rates = array_map(
             static fn (array $row): ShippingRate => ShippingRate::fromArray($row)->withMarkup($markup),

@@ -232,6 +232,10 @@ export interface CreateOrderPayload {
    *  hasil hitung ulangnya berbeda, bukan memakainya sebagai nominal. */
   expected_shipping_cost: number;
   expected_total: number;
+  /** Asuransi pengiriman opsional (dibayar pembeli). Biaya = biaya yang
+   *  DILIHAT pembeli untuk layanan terpilih; 0 kalau tidak dipilih. */
+  with_insurance: boolean;
+  expected_insurance_fee: number;
   items: { product_variant_id: number; quantity: number }[];
 }
 
@@ -251,6 +255,8 @@ export interface CreatedOrder {
 export type CheckoutQuoteErrorCode =
   | "shipping_unavailable"
   | "shipping_cost_changed"
+  | "insurance_unavailable"
+  | "insurance_changed"
   | "total_changed";
 
 /**
@@ -338,6 +344,11 @@ export interface ShippingRate {
   /** Estimasi mentah dari Biteship, mis. "1 - 2 days". */
   etd: string | null;
   description: string | null;
+  /** Layanan ini bisa diasuransikan (kurir mendukung & Biteship memberi biaya). */
+  insurance_available: boolean;
+  /** Biaya asuransi dari Biteship, rupiah bulat — TANPA markup ongkir. 0 kalau
+   *  tidak tersedia. Nilai pertanggungan = subtotal barang (meta.subtotal). */
+  insurance_fee: number;
 }
 
 /** Payload POST /api/shipping/rates (lihat App\Http\Requests\ShippingRatesRequest). */

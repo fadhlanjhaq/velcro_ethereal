@@ -8,10 +8,23 @@
  * memanggil window.snap.pay(token, ...). Tidak ada UI pemilihan metode di sini —
  * semua metode aktif tampil di dalam satu popup Snap.
  *
- * onSuccess / onPending → /checkout/success. onError / onClose → tetap di sini
- * dengan tombol untuk membuka popup lagi atau kembali ke keranjang. Cart baru
- * dibersihkan di halaman success, jadi kalau user menutup popup tanpa bayar,
- * isinya masih ada untuk dicoba lagi.
+ * onSuccess / onPending → /checkout/success?status=paid|pending. Status diambil
+ * dari `transaction_status` hasil callback Snap: settlement/capture = "paid",
+ * selain itu (mis. VA dipilih tapi belum ditransfer) = "pending" — supaya
+ * halaman berikutnya tidak bilang "Pesanan Berhasil" padahal uang belum masuk.
+ * Ini hanya untuk TAMPILAN; status pembayaran final tetap dari webhook Midtrans.
+ * Untuk pending, `token` + `gross` ikut dibawa supaya halaman berikutnya bisa
+ * kembali ke sini (Snap token yang sama bisa dibuka ulang selama belum
+ * kedaluwarsa, default 24 jam).
+ *
+ * onError / onClose → tetap di sini dengan tombol untuk membuka popup lagi atau
+ * kembali ke keranjang. Cart baru dibersihkan di halaman success, jadi kalau
+ * user menutup popup tanpa bayar, isinya masih ada untuk dicoba lagi.
+ *
+ * snap.js siap → `onReady` (bukan `onLoad`): `onLoad` hanya terpicu saat script
+ * PERTAMA kali dimuat di tab itu, jadi pada checkout kedua lewat navigasi
+ * client-side (tanpa refresh) halaman tersangkut di "Menyiapkan pembayaran…".
+ * `onReady` terpicu saat load pertama DAN setiap kali komponen dipasang ulang.
  */
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -43,6 +56,18 @@ const CLIENT_KEY = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY;
 
 type Phase = "loading" | "open" | "closed" | "error";
 
+/**
+ * "paid" hanya kalau Snap melaporkan settlement / capture; selain itu pending.
+ * Hasil callback Snap tidak bertipe (unknown), jadi dibaca defensif.
+ */
+function snapResultStatus(result: unknown): "paid" | "pending" {
+  const status =
+    typeof result === "object" && result !== null
+      ? (result as { transaction_status?: unknown }).transaction_status
+      : undefined;
+  return status === "settlement" || status === "capture" ? "paid" : "pending";
+}
+
 function PaymentContent() {
   const router = useRouter();
   const params = useSearchParams();
@@ -50,6 +75,7 @@ function PaymentContent() {
 
   const order = params.get("order") ?? "";
   const token = params.get("token") ?? "";
+  const grossParam = params.get("gross") ?? "";
 
   // Total tagihan: utamakan `gross` dari query (dibawa dari /checkout, tahan
   // refresh). Fallback ke subtotal cart hanya kalau `gross` tak ada / bukan
@@ -63,7 +89,10 @@ function PaymentContent() {
   const [snapReady, setSnapReady] = useState(false);
   const [phase, setPhase] = useState<Phase>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const autoOpenedRef = useRef(false);
+  // Token yang SUDAH dibuka otomatis di pemasangan ini. Per token (bukan
+  // boolean) supaya popup terbuka otomatis tepat sekali per kunjungan, termasuk
+  // kalau hanya query `token` yang berganti tanpa komponen dipasang ulang.
+  const autoOpenedTokenRef = useRef<string | null>(null);
 
   const pay = useCallback(() => {
     if (!window.snap || !token) return;
@@ -71,23 +100,31 @@ function PaymentContent() {
     setErrorMessage(null);
     setPhase("open");
 
+    const goToResult = (status: "paid" | "pending") => {
+      const query = new URLSearchParams({ order, status });
+      if (status === "pending") {
+        query.set("token", token);
+        if (grossParam) query.set("gross", grossParam);
+      }
+      router.push(`/checkout/success?${query.toString()}`);
+    };
+
     window.snap.pay(token, {
-      onSuccess: () =>
-        router.push(`/checkout/success?order=${encodeURIComponent(order)}`),
-      onPending: () =>
-        router.push(`/checkout/success?order=${encodeURIComponent(order)}`),
+      onSuccess: (result) => goToResult(snapResultStatus(result)),
+      // onPending selalu pending, apa pun isi result-nya.
+      onPending: () => goToResult("pending"),
       onError: () => {
         setPhase("error");
         setErrorMessage("Pembayaran gagal diproses.");
       },
       onClose: () => setPhase("closed"),
     });
-  }, [order, token, router]);
+  }, [order, token, grossParam, router]);
 
-  // Buka popup otomatis sekali begitu snap.js siap.
+  // Buka popup otomatis sekali per token begitu snap.js siap.
   useEffect(() => {
-    if (snapReady && token && !autoOpenedRef.current) {
-      autoOpenedRef.current = true;
+    if (snapReady && token && autoOpenedTokenRef.current !== token) {
+      autoOpenedTokenRef.current = token;
       pay();
     }
   }, [snapReady, token, pay]);
@@ -130,7 +167,8 @@ function PaymentContent() {
       <Script
         src={SNAP_SRC}
         data-client-key={CLIENT_KEY}
-        onLoad={() => setSnapReady(true)}
+        // onReady, bukan onLoad — lihat komentar di atas file.
+        onReady={() => setSnapReady(true)}
         onError={() => {
           setPhase("error");
           setErrorMessage(

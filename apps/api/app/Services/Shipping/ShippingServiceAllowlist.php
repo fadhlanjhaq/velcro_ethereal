@@ -3,8 +3,9 @@
 namespace App\Services\Shipping;
 
 /**
- * Menyaring tarif ke layanan yang boleh dijual (config
- * services.biteship.allowed_services, format "kurir:layanan").
+ * Menyaring tarif ke layanan yang boleh dijual (ShippingSettings: halaman admin
+ * Pengaturan Pengiriman → cadangan .env BITESHIP_ALLOWED_SERVICES; format
+ * "kurir:layanan").
  *
  * Sengaja kelas terpisah, bukan di dalam BiteshipShippingProvider maupun
  * inline di controller:
@@ -17,12 +18,16 @@ namespace App\Services\Shipping;
  */
 class ShippingServiceAllowlist
 {
+    public function __construct(
+        private readonly ShippingSettings $settings,
+    ) {}
+
     /**
      * @return array<int, string>  daftar "kurir:layanan" lowercase; kosong = tidak memfilter
      */
     public function entries(): array
     {
-        return (array) config('services.biteship.allowed_services');
+        return $this->settings->allowedServices();
     }
 
     /**

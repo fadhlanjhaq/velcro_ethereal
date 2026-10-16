@@ -45,6 +45,12 @@ return [
     // Biteship (ongkir). Mode test/live ditentukan oleh jenis API key
     // (biteship_test. / biteship_live.), base URL sama. Lihat
     // docs/decisions/shipping-biteship.md.
+    //
+    // couriers, allowed_services, dan origin di bawah kini hanya CADANGAN:
+    // nilai di halaman admin "Pengaturan Pengiriman" (tabel shipping_settings)
+    // diutamakan per field. Baca lewat App\Services\Shipping\ShippingSettings,
+    // jangan langsung config() ini. api_key, base_url, timeout, dan webhook
+    // tetap hanya dari .env (rahasia / teknis).
     'biteship' => [
         'api_key' => env('BITESHIP_API_KEY'),
         'base_url' => env('BITESHIP_BASE_URL', 'https://api.biteship.com'),
@@ -76,6 +82,14 @@ return [
             'contact_phone' => env('BITESHIP_ORIGIN_CONTACT_PHONE'),
             'address' => env('BITESHIP_ORIGIN_ADDRESS'),
         ],
+        // Webhook status pengiriman (Langkah E2). Diatur di dashboard Biteship
+        // (Integrations → For Developers → Webhook): "Headers Signature Key" =
+        // nama header, "Headers Signature Secret" = nilainya. Salah satu kosong
+        // → endpoint menolak SEMUA request (fail closed).
+        'webhook' => [
+            'signature_key' => env('BITESHIP_WEBHOOK_SIGNATURE_KEY'),
+            'signature_secret' => env('BITESHIP_WEBHOOK_SIGNATURE_SECRET'),
+        ],
     ],
 
     // Aturan checkout milik toko (bukan milik satu vendor), dipakai bersama
@@ -91,6 +105,8 @@ return [
         // keputusan Kapten untuk menutup biaya Rates API (rencana 500 di
         // production). Dipasang ShippingQuoteService setelah cache, jadi
         // ongkir yang tampil = yang ditagih = tarif asli + markup. >= 0.
+        // CADANGAN: nilai di halaman admin "Pengaturan Pengiriman" diutamakan
+        // (baca lewat ShippingSettings::shippingMarkup()).
         'shipping_markup' => max(0, (int) env('SHIPPING_MARKUP', 0)),
     ],
 

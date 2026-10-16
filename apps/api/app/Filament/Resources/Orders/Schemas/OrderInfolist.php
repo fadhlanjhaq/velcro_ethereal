@@ -47,6 +47,12 @@ class OrderInfolist
                     ->label('Biaya layanan')
                     ->money('IDR')
                     ->visible(fn (Order $record): bool => (float) $record->service_fee > 0),
+                // Asuransi pengiriman (opsional, dibayar pembeli). Order tanpa
+                // asuransi (termasuk order lama) → 0 → tidak ditampilkan.
+                TextEntry::make('insurance_fee')
+                    ->label('Asuransi pengiriman')
+                    ->money('IDR')
+                    ->visible(fn (Order $record): bool => (float) $record->insurance_fee > 0),
                 TextEntry::make('total')
                     ->money('IDR'),
 
@@ -117,6 +123,22 @@ class OrderInfolist
                     ->label('Tarif kurir (asli)')
                     ->money('IDR')
                     ->placeholder('—'),
+                // null insurance_value = tidak diasuransikan. Nilai pertanggungan
+                // ini yang dikirim ke Biteship saat booking (Langkah D2).
+                TextEntry::make('shipment_insurance')
+                    ->label('Asuransi')
+                    ->state(function (Order $record): string {
+                        $value = $record->shipment?->insurance_value;
+
+                        if ($value === null) {
+                            return 'Tidak';
+                        }
+
+                        $rupiah = static fn ($amount): string => 'Rp '.number_format((float) $amount, 0, ',', '.');
+
+                        return 'Pertanggungan '.$rupiah($value)
+                            .' (biaya '.$rupiah($record->shipment->insurance_fee).')';
+                    }),
                 TextEntry::make('shipment.etd')
                     ->label('Estimasi (dari Biteship)')
                     ->placeholder('—'),
@@ -124,9 +146,107 @@ class OrderInfolist
                     ->label('Status pengiriman')
                     ->badge()
                     ->placeholder('—'),
+                // Booking kurir (tombol "Siap Kirim", Langkah D2).
+                TextEntry::make('shipment_booking_status')
+                    ->label('Status booking kurir')
+                    ->badge()
+                    ->state(fn (Order $record): ?string => match (true) {
+                        $record->shipment === null => null,
+                        $record->shipment->isBooked() => 'Dibooking',
+                        $record->shipment->bookingFailed() => 'Booking gagal',
+                        default => 'Belum dibooking',
+                    })
+                    ->color(fn (?string $state): string => match ($state) {
+                        'Dibooking' => 'success',
+                        'Booking gagal' => 'danger',
+                        default => 'gray',
+                    })
+                    ->placeholder('—'),
+                TextEntry::make('shipment.booked_at')
+                    ->label('Dibooking pada')
+                    ->dateTime()
+                    ->placeholder('—'),
+                // Status kurir terakhir dari webhook Biteship (Langkah E2), apa
+                // adanya — termasuk status bermasalah yang tidak punya padanan
+                // di status pengiriman di atas.
+                TextEntry::make('shipment.provider_status')
+                    ->label('Status kurir terakhir')
+                    ->badge()
+                    ->color(fn (Order $record): string => $record->shipment?->hasProviderProblem() ? 'danger' : 'gray')
+                    ->formatStateUsing(fn (?string $state, Order $record): string => $record->shipment?->hasProviderProblem()
+                        ? "Bermasalah: {$state}"
+                        : (string) $state)
+                    ->placeholder('Belum ada kabar dari kurir'),
+                TextEntry::make('shipment.provider_status_at')
+                    ->label('Kabar kurir diterima')
+                    ->dateTime()
+                    ->placeholder('—'),
+                TextEntry::make('shipment.shipped_at')
+                    ->label('Dijemput kurir')
+                    ->dateTime()
+                    ->placeholder('—'),
+                TextEntry::make('shipment.delivered_at')
+                    ->label('Sampai di penerima')
+                    ->dateTime()
+                    ->placeholder('—'),
+                // Alasan & waktu percobaan hanya relevan selama belum ada booking
+                // yang sukses.
+                TextEntry::make('shipment.booking_error')
+                    ->label('Alasan booking gagal')
+                    ->color('danger')
+                    ->visible(fn (Order $record): bool => (bool) $record->shipment?->bookingFailed())
+                    ->columnSpanFull(),
+                TextEntry::make('shipment.booking_attempted_at')
+                    ->label('Percobaan terakhir')
+                    ->dateTime()
+                    ->visible(fn (Order $record): bool => (bool) $record->shipment?->bookingFailed()),
                 TextEntry::make('shipment.tracking_number')
                     ->label('Nomor resi')
-                    ->placeholder('Belum ada (booking kurir manual sampai Langkah D)'),
+                    ->copyable()
+                    ->placeholder('—'),
+                TextEntry::make('shipment.biteship_tracking_id')
+                    ->label('Tracking ID Biteship')
+                    ->placeholder('—'),
+                TextEntry::make('shipment.tracking_link')
+                    ->label('Link lacak')
+                    ->url(fn (?string $state): ?string => $state)
+                    ->openUrlInNewTab()
+                    ->placeholder('—'),
+                TextEntry::make('shipment.biteship_order_id')
+                    ->label('ID order Biteship')
+                    ->copyable()
+                    ->placeholder('—'),
+                // Harga aktual vs perkiraan (provider_cost + insurance_fee). Beda
+                // tidak menggagalkan booking — selisih ditanggung / jadi margin toko.
+                TextEntry::make('shipment.booked_price')
+                    ->label('Harga booking aktual')
+                    ->money('IDR')
+                    ->placeholder('—'),
+                // Event order.price (mis. berat aktual ditimbang kurir). Selisih
+                // ditanggung toko — pembeli sudah membayar ongkir saat checkout.
+                TextEntry::make('shipment_final_price_warning')
+                    ->label('Peringatan tagihan kurir')
+                    ->color('warning')
+                    ->state(function (Order $record): ?string {
+                        $shipment = $record->shipment;
+
+                        if ($shipment === null || ! $shipment->finalPriceChanged()) {
+                            return null;
+                        }
+
+                        $rupiah = static fn ($amount): string => 'Rp '.number_format((float) $amount, 0, ',', '.');
+
+                        return 'Tagihan kurir berubah: '.$rupiah($shipment->booked_price)
+                            .' → '.$rupiah($shipment->provider_final_price).' (selisih ditanggung toko)';
+                    })
+                    ->visible(fn (Order $record): bool => (bool) $record->shipment?->finalPriceChanged())
+                    ->columnSpanFull(),
+                TextEntry::make('shipment_expected_booking_price')
+                    ->label('Perkiraan harga booking')
+                    ->state(fn (Order $record): ?int => $record->shipment?->expectedBookingPrice())
+                    ->money('IDR')
+                    ->hint('Tarif kurir asli + asuransi, saat checkout')
+                    ->placeholder('—'),
             ]);
     }
 }

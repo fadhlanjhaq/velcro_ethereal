@@ -19,13 +19,19 @@
  * subtotal dari `meta.items` / `meta.subtotal` (harga DB terbaru, rumus yang
  * sama dengan POST /api/orders), dan harga di cart ikut disinkronkan
  * (`syncPrices`). Total = meta.subtotal + ongkir + biaya layanan
- * (`meta.service_fee`, barisnya tidak tampil kalau 0) — sama dengan
- * gross_amount, jadi harga lama di cart tidak bisa membuat order ditolak terus.
+ * (`meta.service_fee`, barisnya tidak tampil kalau 0) + asuransi pengiriman
+ * kalau dicentang — sama dengan gross_amount, jadi harga lama di cart tidak
+ * bisa membuat order ditolak terus.
+ *
+ * Asuransi pengiriman: OPSIONAL, tidak tercentang secara default, dibayar
+ * pembeli. Biayanya dari Biteship per layanan (`insurance_fee`, tanpa markup);
+ * nonaktif kalau layanan terpilih tidak mendukung.
  *
  * Submit mengirim area, layanan terpilih, serta ongkir & total yang DILIHAT
  * pembeli (`expected_*`). Backend menghitung ulang lewat jalur tarif yang
  * sama; kalau hasilnya berbeda, order ditolak 422 dengan `code`
- * (shipping_unavailable / shipping_cost_changed / total_changed) dan TIDAK
+ * (shipping_unavailable / shipping_cost_changed / insurance_unavailable /
+ * insurance_changed / total_changed) dan TIDAK
  * dibuat. Halaman ini lalu menampilkan pesannya dan memuat ulang tarif —
  * yang sekaligus menyegarkan harga produk, ongkir, dan ringkasan — dan pembeli
  * cukup submit sekali lagi dengan idempotency key yang sama. Lihat
@@ -71,6 +77,8 @@ const ADDRESS_DETAIL_MAX = 500;
 const QUOTE_ERROR_CODES = new Set([
   "shipping_unavailable",
   "shipping_cost_changed",
+  "insurance_unavailable",
+  "insurance_changed",
   "total_changed",
 ]);
 
@@ -115,6 +123,9 @@ export default function CheckoutPage() {
   // Pilihan EKSPLISIT pembeli. Kalau null atau sudah tidak ada di tarif
   // terbaru, layanan termurah yang dipakai (lihat `selectedRate`).
   const [chosenRateId, setChosenRateId] = useState<string | null>(null);
+  // Keinginan pembeli soal asuransi. Yang benar-benar dipakai = keinginan ini
+  // DAN layanan terpilih mendukung asuransi (lihat `withInsurance`).
+  const [wantsInsurance, setWantsInsurance] = useState(false);
   const [ratesResult, setRatesResult] = useState<RatesResult | null>(null);
   // Dinaikkan oleh tombol "Coba lagi" dan oleh error quote dari POST
   // /api/orders → key berubah → tarif diambil ulang (state lama dilewati).
@@ -234,10 +245,20 @@ export default function CheckoutPage() {
   const selectedRateId = selectedRate ? rateId(selectedRate) : null;
 
   const shippingCost = selectedRate?.cost ?? 0;
+  // Asuransi hanya bisa dipilih kalau layanan terpilih mendukungnya. Kalau
+  // tidak (mis. setelah tarif dimuat ulang / default termurah berganti), kotak
+  // centang otomatis tampil tidak tercentang dan biayanya tidak dihitung.
+  const insuranceSelectable =
+    selectedRate !== null &&
+    selectedRate.insurance_available &&
+    selectedRate.insurance_fee > 0;
+  const withInsurance = wantsInsurance && insuranceSelectable;
+  const insuranceFee = withInsurance ? (selectedRate?.insurance_fee ?? 0) : 0;
   const displaySubtotal = quoteSubtotal ?? Number(subtotal);
   // Rumus sama dengan gross_amount backend: subtotal backend + ongkir + biaya
-  // layanan (ketiganya rupiah bulat). Ini yang dikirim sebagai expected_total.
-  const total = displaySubtotal + shippingCost + serviceFee;
+  // layanan + asuransi (semuanya rupiah bulat). Ini yang dikirim sebagai
+  // expected_total.
+  const total = displaySubtotal + shippingCost + serviceFee + insuranceFee;
 
   // Alasan pertama yang menahan tombol submit — ditampilkan sebagai teks bantu.
   let blockReason: string | null = null;
@@ -287,7 +308,10 @@ export default function CheckoutPage() {
         courier_code: selectedRate.courier_code,
         service_code: selectedRate.service_code,
         expected_shipping_cost: selectedRate.cost,
-        expected_total: quoteSubtotal + selectedRate.cost + serviceFee,
+        expected_total:
+          quoteSubtotal + selectedRate.cost + serviceFee + insuranceFee,
+        with_insurance: withInsurance,
+        expected_insurance_fee: insuranceFee,
         items: items.map((item) => ({
           product_variant_id: item.productVariantId,
           quantity: item.qty,
@@ -314,6 +338,9 @@ export default function CheckoutPage() {
       ) {
         // Layanan yang hilang tidak dipertahankan; kembali ke default termurah.
         if (err.code === "shipping_unavailable") setChosenRateId(null);
+        // Asuransi tidak tersedia lagi → lepas centangnya; pembeli bisa
+        // lanjut tanpa asuransi atau memilih layanan lain lalu mencentang ulang.
+        if (err.code === "insurance_unavailable") setWantsInsurance(false);
         setRatesRetry((n) => n + 1);
       }
 
@@ -537,6 +564,12 @@ export default function CheckoutPage() {
                           checked={selected}
                           onChange={() => {
                             setChosenRateId(id);
+                            // Layanan tanpa asuransi → centang dilepas, jadi
+                            // tidak "muncul sendiri" saat kembali ke layanan
+                            // yang mendukung.
+                            const insurable =
+                              opt.insurance_available && opt.insurance_fee > 0;
+                            if (!insurable) setWantsInsurance(false);
                             setErrorMessage(null);
                           }}
                           className="sr-only"
@@ -720,11 +753,61 @@ export default function CheckoutPage() {
                     </dd>
                   </div>
                 )}
-                <div className="flex justify-between text-cream/60">
-                  <dt>Asuransi Koleksi Mewah</dt>
-                  <dd className="font-medium text-emerald-400">Gratis</dd>
-                </div>
+                {withInsurance && (
+                  <div className="flex justify-between text-cream/60">
+                    <dt>Asuransi pengiriman</dt>
+                    <dd className="font-medium text-cream">
+                      {formatRupiah(String(insuranceFee))}
+                    </dd>
+                  </div>
+                )}
               </dl>
+
+              {/* Asuransi pengiriman — opsional, dibayar pembeli. Teks bantu
+                  sengaja hanya menyebut nilai pertanggungan & kebijakan kurir:
+                  cakupan klaim ditentukan kurir, bukan oleh toko. */}
+              <div className="mt-4 border-t border-cream/10 pt-4">
+                <label
+                  className={[
+                    "flex items-start gap-3 text-xs",
+                    insuranceSelectable
+                      ? "cursor-pointer"
+                      : "cursor-not-allowed opacity-60",
+                  ].join(" ")}
+                >
+                  <input
+                    type="checkbox"
+                    checked={withInsurance}
+                    disabled={!insuranceSelectable}
+                    aria-describedby="insurance-hint"
+                    onChange={(e) => {
+                      setWantsInsurance(e.target.checked);
+                      setErrorMessage(null);
+                    }}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-gold"
+                  />
+                  <span className="flex-1">
+                    <span className="flex justify-between gap-3 text-cream/80">
+                      <span>Tambah asuransi pengiriman</span>
+                      {insuranceSelectable && (
+                        <span className="font-medium text-cream">
+                          {formatRupiah(String(selectedRate?.insurance_fee ?? 0))}
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      id="insurance-hint"
+                      className="mt-1 block text-[11px] leading-relaxed text-cream/50"
+                    >
+                      {!selectedRate
+                        ? "Pilih layanan pengiriman untuk melihat biaya asuransi."
+                        : !insuranceSelectable
+                          ? "Tidak tersedia untuk layanan ini"
+                          : `Nilai pertanggungan ${formatRupiah(String(quoteSubtotal ?? displaySubtotal))}. Ketentuan klaim mengikuti kebijakan kurir.`}
+                    </span>
+                  </span>
+                </label>
+              </div>
 
               <div className="mt-5 flex items-baseline justify-between border-t border-cream/10 pt-5">
                 <span className="text-xs font-medium uppercase tracking-[0.22em] text-cream/60">

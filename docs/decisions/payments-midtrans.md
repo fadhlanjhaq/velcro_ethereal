@@ -144,6 +144,23 @@ varian (read-only) supaya frontend bisa mengirim `product_variant_id`; harga &
 nama tetap di-resolve ulang dari DB di backend (§2.1). `MockProductVariant`
 (`apps/web/src/lib/mock-products.ts`) ikut ditambah `id` agar kontrak tipe cocok.
 
+**Perbaikan setelah integrasi Biteship (Oktober 2026):**
+
+- `/checkout/payment` menandai snap.js siap lewat `<Script onReady>`, bukan
+  `onLoad`. `onLoad` hanya terpicu saat script pertama kali dimuat di tab itu,
+  sehingga checkout kedua lewat navigasi client-side (tanpa refresh) tersangkut
+  di "Menyiapkan pembayaran…". Popup tetap dibuka otomatis tepat sekali per
+  token per kunjungan halaman.
+- `onSuccess` dengan `transaction_status` selain `settlement`/`capture`, dan
+  semua `onPending`, diarahkan ke varian **"Menunggu Pembayaran"** di
+  `/checkout/success` (bukan "Pesanan Berhasil"). Varian itu punya tombol
+  **"Lanjutkan Pembayaran"** (hanya kalau `token` ada di URL) yang kembali ke
+  `/checkout/payment` dengan Snap token yang sama. Docs Snap menjamin token
+  boleh dibuka ulang selama belum kedaluwarsa (default 24 jam) dan menyebut
+  tampilan ulang untuk e-wallet/QRIS. **Asumsi:** untuk VA / transfer bank,
+  instruksi & nomor VA yang sudah dipilih juga tampil lagi — belum
+  terdokumentasi, perlu dicek di sandbox. Detail: `shipping-biteship.md` §1.11.
+
 ---
 
 ## 2. Catatan Keamanan & Integritas

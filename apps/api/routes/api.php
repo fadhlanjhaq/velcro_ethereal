@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BiteshipWebhookController;
 use App\Http\Controllers\MidtransWebhookController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
@@ -37,3 +38,10 @@ Route::post('/shipping/rates', [ShippingController::class, 'rates'])
 // Payment notification dari Midtrans (server-to-server, bukan browser). Publik,
 // tanpa middleware — keasliannya diverifikasi lewat signature di controller.
 Route::post('/midtrans/notification', [MidtransWebhookController::class, 'handle']);
+
+// Webhook status pengiriman dari Biteship (server-to-server). Publik, tapi
+// keasliannya diverifikasi lewat header rahasia di controller (fail closed).
+// Throttle longgar terpisah — hanya rem kalau ada banjir request, bukan
+// pembatas normal (Biteship bisa mengirim beberapa event per order).
+Route::post('/biteship/webhook', [BiteshipWebhookController::class, 'handle'])
+    ->middleware('throttle:biteship-webhook');

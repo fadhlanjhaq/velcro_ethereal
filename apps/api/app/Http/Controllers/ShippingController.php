@@ -5,13 +5,11 @@ namespace App\Http\Controllers;
 use App\Exceptions\InvalidShippingItemException;
 use App\Exceptions\ShippingProviderException;
 use App\Http\Requests\ShippingRatesRequest;
-use App\Services\Shipping\ShippingArea;
-use App\Services\Shipping\ShippingProvider;
+use App\Services\Shipping\ShippingAreaSearch;
 use App\Services\Shipping\ShippingQuoteService;
 use App\Services\Shipping\ShippingRate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * Endpoint publik ongkir: autocomplete area tujuan + cek tarif kurir.
@@ -20,38 +18,24 @@ use Illuminate\Support\Facades\Cache;
  * limiter di AppServiceProvider) hasilnya di-cache di store cache bawaan
  * config. Yang di-cache hanya hasil SUKSES (array siap-JSON, bukan objek DTO,
  * supaya aman di semua cache driver); exception tidak pernah ikut tersimpan.
- * Cache & alur tarif ada di ShippingQuoteService (dipakai juga OrderController).
+ * Cache & alur tarif ada di ShippingQuoteService (dipakai juga OrderController);
+ * cache area di ShippingAreaSearch (dipakai juga halaman admin Pengaturan
+ * Pengiriman).
  * Lihat docs/decisions/shipping-biteship.md.
  */
 class ShippingController extends Controller
 {
     /**
-     * Area jarang berubah → cache panjang.
-     */
-    private const AREAS_TTL_SECONDS = 60 * 60 * 24;
-
-    /**
      * GET /api/shipping/areas?q=
      */
-    public function areas(Request $request, ShippingProvider $provider): JsonResponse
+    public function areas(Request $request, ShippingAreaSearch $areaSearch): JsonResponse
     {
         $validated = $request->validate([
             'q' => ['required', 'string', 'min:3', 'max:100'],
         ]);
 
-        // "  Cilandak " dan "cilandak" → satu cache entry (dan satu request
-        // berbayar ke Biteship).
-        $query = mb_strtolower(trim(preg_replace('/\s+/u', ' ', $validated['q'])));
-
         try {
-            $areas = Cache::remember(
-                'shipping:areas:'.sha1($query),
-                self::AREAS_TTL_SECONDS,
-                fn (): array => array_map(
-                    static fn (ShippingArea $area): array => $area->toArray(),
-                    $provider->searchAreas($query),
-                ),
-            );
+            $areas = $areaSearch->search($validated['q']);
         } catch (ShippingProviderException $e) {
             report($e);
 

@@ -45,7 +45,9 @@ class OrderController extends Controller
      *   → order DITOLAK 422 (CheckoutQuoteChangedException), tidak disesuaikan
      *   diam-diam.
      * - total = subtotal + shipping_cost + service_fee (config
-     *   services.checkout.service_fee, 0 = tidak ada).
+     *   services.checkout.service_fee, 0 = tidak ada) + insurance_fee (asuransi
+     *   opsional pilihan pembeli, biaya dari Biteship tanpa markup; 0 kalau
+     *   tidak dipilih).
      * - Guest checkout only, tanpa auth (konsisten dengan route lain).
      * - Idempotent per `idempotency_key`: klik ganda / retry jaringan dari satu
      *   percobaan checkout (page load /checkout yang sama) tidak membuat order +
@@ -56,7 +58,7 @@ class OrderController extends Controller
      *   bisa memilih ulang dan submit lagi dengan key yang sama.
      *
      * @throws InvalidShippingItemException   produk nonaktif / berat kosong (→ 422)
-     * @throws CheckoutQuoteChangedException  shipping_unavailable / shipping_cost_changed / total_changed (→ 422)
+     * @throws CheckoutQuoteChangedException  shipping_unavailable / shipping_cost_changed / insurance_unavailable / insurance_changed / total_changed (→ 422)
      */
     public function store(
         StoreOrderRequest $request,
@@ -103,6 +105,18 @@ class OrderController extends Controller
 
         if ($rate->cost !== (int) $data['expected_shipping_cost']) {
             throw CheckoutQuoteChangedException::shippingCostChanged($rate->cost);
+        }
+
+        // Asuransi (opsional): layanan harus mendukung, dan biayanya harus sama
+        // dengan yang dilihat pembeli — aturan yang sama dengan ongkir.
+        if ($data['with_insurance']) {
+            if (! $rate->insuranceAvailable) {
+                throw CheckoutQuoteChangedException::insuranceUnavailable();
+            }
+
+            if ($rate->insuranceFee !== (int) $data['expected_insurance_fee']) {
+                throw CheckoutQuoteChangedException::insuranceChanged($rate->insuranceFee);
+            }
         }
 
         try {
@@ -251,7 +265,10 @@ class OrderController extends Controller
         // Keduanya rupiah bulat, jadi tidak menambah pecahan ke total.
         $shippingCost = $rate->cost;
         $serviceFee = (int) config('services.checkout.service_fee');
-        $total = $subtotal + $shippingCost + $serviceFee;
+        // Sudah dicek cocok dengan expected_insurance_fee di store(). Rupiah bulat.
+        $withInsurance = (bool) $data['with_insurance'];
+        $insuranceFee = $withInsurance ? $rate->insuranceFee : 0;
+        $total = $subtotal + $shippingCost + $serviceFee + $insuranceFee;
         // = toRupiah(subtotal) + ongkir + biaya layanan, karena dua yang
         // terakhir sudah bulat — persis rumus Total Tagihan di /checkout.
         $grossAmount = CheckoutPricing::toRupiah($total);
@@ -296,6 +313,15 @@ class OrderController extends Controller
                 'price' => $serviceFee,
                 'quantity' => 1,
                 'name' => 'Biaya layanan',
+            ];
+        }
+
+        if ($insuranceFee > 0) {
+            $itemDetails[] = [
+                'id' => 'INSURANCE',
+                'price' => $insuranceFee,
+                'quantity' => 1,
+                'name' => 'Asuransi pengiriman',
             ];
         }
 
@@ -354,6 +380,7 @@ class OrderController extends Controller
                 'subtotal' => $subtotal,
                 'shipping_cost' => $shippingCost,
                 'service_fee' => $serviceFee,
+                'insurance_fee' => $insuranceFee,
                 'total' => $total,
                 'status' => OrderStatus::Pending,
             ]);
@@ -392,6 +419,11 @@ class OrderController extends Controller
             // booking (Langkah D). Selisihnya margin toko.
             'cost' => $rate->cost,
             'provider_cost' => $rate->providerCost,
+            // Asuransi: null = tidak diasuransikan. insurance_value = nilai
+            // pertanggungan yang sama dengan courier_insurance saat cek tarif;
+            // dikirim lagi sebagai courier_insurance saat booking (Langkah D2).
+            'insurance_value' => $withInsurance ? CheckoutPricing::insuranceValue($snapshots) : null,
+            'insurance_fee' => $withInsurance ? $insuranceFee : null,
             'etd' => $rate->etd,
             'status' => ShipmentStatus::Pending,
         ]);
