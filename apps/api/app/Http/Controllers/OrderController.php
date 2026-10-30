@@ -4,15 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Enums\ShipmentStatus;
+use App\Exceptions\CheckoutQuoteChangedException;
 use App\Exceptions\DuplicateIdempotencyKeyException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\InvalidOrderTotalException;
+use App\Exceptions\InvalidShippingItemException;
 use App\Exceptions\PaymentGatewayException;
+use App\Exceptions\ShippingProviderException;
 use App\Http\Requests\StoreOrderRequest;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\ProductVariant;
+use App\Services\CheckoutPricing;
 use App\Services\MidtransService;
+use App\Services\Shipping\ShippingQuoteService;
+use App\Services\Shipping\ShippingRate;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -29,14 +36,35 @@ class OrderController extends Controller
      *   stok nyata terjadi di webhook handler (fase berikutnya).
      * - Harga & nama produk diambil ULANG dari database berdasarkan
      *   product_variant_id; nilai dari body request tidak dipercaya.
-     * - shipping_cost di-hardcode 0 (Biteship belum terintegrasi).
+     * - Ongkir dihitung ULANG di backend lewat ShippingQuoteService — jalur yang
+     *   sama dengan POST /api/shipping/rates (lihat
+     *   docs/decisions/shipping-biteship.md). Quote diambil SEBELUM
+     *   DB::transaction supaya transaksi DB tidak tertahan menunggu Biteship.
+     * - Pembeli tidak boleh ditagih angka yang berbeda dari yang dilihatnya:
+     *   layanan hilang / di luar allowlist, ongkir berubah, atau total berubah
+     *   → order DITOLAK 422 (CheckoutQuoteChangedException), tidak disesuaikan
+     *   diam-diam.
+     * - total = subtotal + shipping_cost + service_fee (config
+     *   services.checkout.service_fee, 0 = tidak ada) + insurance_fee (asuransi
+     *   opsional pilihan pembeli, biaya dari Biteship tanpa markup; 0 kalau
+     *   tidak dipilih).
      * - Guest checkout only, tanpa auth (konsisten dengan route lain).
      * - Idempotent per `idempotency_key`: klik ganda / retry jaringan dari satu
      *   percobaan checkout (page load /checkout yang sama) tidak membuat order +
      *   Snap token ganda. Reload halaman = key baru = percobaan baru yang sah.
+     *   Konsekuensi yang disengaja: replay dengan key yang sudah punya order
+     *   mengembalikan order LAMA apa adanya, walaupun kurir/alamat di request
+     *   baru berbeda. Order yang DITOLAK (422) tidak tersimpan, jadi pembeli
+     *   bisa memilih ulang dan submit lagi dengan key yang sama.
+     *
+     * @throws InvalidShippingItemException   produk nonaktif / berat kosong (→ 422)
+     * @throws CheckoutQuoteChangedException  shipping_unavailable / shipping_cost_changed / insurance_unavailable / insurance_changed / total_changed (→ 422)
      */
-    public function store(StoreOrderRequest $request, MidtransService $midtrans): JsonResponse
-    {
+    public function store(
+        StoreOrderRequest $request,
+        MidtransService $midtrans,
+        ShippingQuoteService $quotes,
+    ): JsonResponse {
         $data = $request->validated();
 
         // Idempotency (cek aplikasi, sebelum transaksi). Kalau key ini sudah
@@ -52,9 +80,48 @@ class OrderController extends Controller
             return $this->respondForExistingOrder($existing);
         }
 
+        // Hitung ulang ongkir SEBELUM transaksi DB (panggilan Biteship bisa
+        // makan waktu sampai timeout; jangan menahan lock/transaksi selama itu).
+        // InvalidShippingItemException (produk nonaktif / berat kosong) dibiarkan
+        // naik → 422 via render(), sama seperti di POST /api/shipping/rates.
+        try {
+            $quote = $quotes->quote($data['destination_area_id'], $data['items']);
+        } catch (ShippingProviderException $e) {
+            report($e);
+
+            return response()->json(
+                ['message' => 'Gagal mengambil ongkir, coba lagi.'],
+                502,
+            );
+        }
+
+        // Tarif di quote sudah termasuk markup (jalur yang sama dengan endpoint
+        // rates), jadi dibandingkan apel-ke-apel dengan expected_shipping_cost.
+        $rate = $quotes->find($quote->rates, $data['courier_code'], $data['service_code']);
+
+        if ($rate === null) {
+            throw CheckoutQuoteChangedException::shippingUnavailable();
+        }
+
+        if ($rate->cost !== (int) $data['expected_shipping_cost']) {
+            throw CheckoutQuoteChangedException::shippingCostChanged($rate->cost);
+        }
+
+        // Asuransi (opsional): layanan harus mendukung, dan biayanya harus sama
+        // dengan yang dilihat pembeli — aturan yang sama dengan ongkir.
+        if ($data['with_insurance']) {
+            if (! $rate->insuranceAvailable) {
+                throw CheckoutQuoteChangedException::insuranceUnavailable();
+            }
+
+            if ($rate->insuranceFee !== (int) $data['expected_insurance_fee']) {
+                throw CheckoutQuoteChangedException::insuranceChanged($rate->insuranceFee);
+            }
+        }
+
         try {
             $payload = DB::transaction(
-                fn (): array => $this->createOrderWithSnapToken($data, $midtrans),
+                fn (): array => $this->createOrderWithSnapToken($data, $rate, $midtrans),
             );
         } catch (DuplicateIdempotencyKeyException $e) {
             // Request lain dengan key yang sama menang balapan INSERT; transaksi
@@ -122,18 +189,20 @@ class OrderController extends Controller
 
     /**
      * Isi transaksi: agregasi item, validasi stok & ketersediaan produk,
-     * snapshot harga, guard nominal, buat order/items/payment, lalu minta Snap
-     * token. Dipanggil di dalam DB::transaction().
+     * snapshot harga, guard nominal, buat order/items/shipment/payment, lalu
+     * minta Snap token. Dipanggil di dalam DB::transaction().
      *
      * @param  array<string, mixed>  $data  hasil StoreOrderRequest::validated()
+     * @param  ShippingRate  $rate  layanan pilihan pembeli yang sudah lolos cek di store()
      * @return array{order_number: string, snap_token: string, gross_amount: int}
      *
      * @throws InsufficientStockException        stok kurang / produk non-aktif (→ 422, rollback)
      * @throws InvalidOrderTotalException        total <= 0 atau item_details != gross_amount (→ 422, rollback)
+     * @throws CheckoutQuoteChangedException     total != expected_total (→ 422 total_changed, rollback)
      * @throws PaymentGatewayException           Snap token gagal (→ 502, rollback)
      * @throws DuplicateIdempotencyKeyException  key sudah dipakai order lain (race → replay/409, rollback)
      */
-    private function createOrderWithSnapToken(array $data, MidtransService $midtrans): array
+    private function createOrderWithSnapToken(array $data, ShippingRate $rate, MidtransService $midtrans): array
     {
         // Gabungkan baris item yang menunjuk product_variant_id sama: quantity
         // dijumlahkan lebih dulu, supaya (a) validasi stok membandingkan TOTAL
@@ -174,36 +243,48 @@ class OrderController extends Controller
                 );
             }
 
-            // Harga satuan: override varian kalau ada, kalau tidak harga dasar produk.
-            $unitPrice = $variant->price_override ?? $variant->product->base_price;
-
+            // Harga satuan: override varian kalau ada, kalau tidak harga dasar
+            // produk. Lewat CheckoutPricing — rumus yang sama dengan meta
+            // POST /api/shipping/rates yang ditampilkan di /checkout.
             $snapshots[] = [
                 'product_variant_id' => $variant->id,
                 'sku' => $variant->sku,
                 'product_name' => $variant->product->name,
                 'size' => $variant->size,
-                'price' => (float) $unitPrice,
+                'price' => CheckoutPricing::unitPrice($variant),
                 'quantity' => $quantity,
             ];
         }
 
-        // subtotal dari snapshot.
-        $subtotal = array_sum(array_map(
-            static fn (array $s): float => $s['price'] * $s['quantity'],
-            $snapshots,
-        ));
+        // subtotal dari snapshot — CheckoutPricing::subtotal(), fungsi yang sama
+        // yang menghasilkan meta.subtotal di POST /api/shipping/rates.
+        $subtotal = CheckoutPricing::subtotal($snapshots);
 
-        // total. shipping_cost hardcoded 0.
-        // TODO(biteship): ganti dengan ongkir nyata setelah Biteship terintegrasi
-        // (lihat catatan di apps/web/src/app/(main)/checkout/page.tsx).
-        $shippingCost = 0;
-        $total = $subtotal + $shippingCost;
-        $grossAmount = (int) round($total);
+        // total = subtotal + ongkir (hasil hitung ulang, sudah dicocokkan dengan
+        // yang dilihat pembeli di store()) + biaya layanan (config, bisa 0).
+        // Keduanya rupiah bulat, jadi tidak menambah pecahan ke total.
+        $shippingCost = $rate->cost;
+        $serviceFee = (int) config('services.checkout.service_fee');
+        // Sudah dicek cocok dengan expected_insurance_fee di store(). Rupiah bulat.
+        $withInsurance = (bool) $data['with_insurance'];
+        $insuranceFee = $withInsurance ? $rate->insuranceFee : 0;
+        $total = $subtotal + $shippingCost + $serviceFee + $insuranceFee;
+        // = toRupiah(subtotal) + ongkir + biaya layanan, karena dua yang
+        // terakhir sudah bulat — persis rumus Total Tagihan di /checkout.
+        $grossAmount = CheckoutPricing::toRupiah($total);
 
         // Guard: Midtrans menolak gross_amount <= 0 (mis. base_price 0 / salah
         // input admin). Tahan di sini dengan pesan yang jelas.
         if ($total <= 0) {
             throw new InvalidOrderTotalException('Total order harus lebih dari 0.');
+        }
+
+        // Guard: total yang akan ditagih harus PERSIS sama dengan "Total
+        // Tagihan" yang dilihat pembeli (mis. harga produk / biaya layanan
+        // berubah setelah halaman checkout dibuka). Di sini, bukan di store(),
+        // karena subtotal baru diketahui dari snapshot DB di atas.
+        if ($grossAmount !== (int) $data['expected_total']) {
+            throw CheckoutQuoteChangedException::totalChanged($grossAmount);
         }
 
         // item_details — dibangun sebelum menulis apa pun ke DB supaya
@@ -214,6 +295,35 @@ class OrderController extends Controller
             'quantity' => $s['quantity'],
             'name' => mb_substr($s['product_name'].' - '.$s['size'], 0, 50),
         ], $snapshots);
+
+        // Ongkir & biaya layanan sebagai baris tersendiri supaya
+        // sum(item_details) == gross_amount tetap terjaga (dicek di bawah) dan
+        // rinciannya terlihat di dashboard Midtrans. Biaya layanan 0 = tidak
+        // ada baris sama sekali.
+        $itemDetails[] = [
+            'id' => 'SHIPPING',
+            'price' => $shippingCost,
+            'quantity' => 1,
+            'name' => mb_substr("Ongkir {$rate->courierName} {$rate->serviceName}", 0, 50),
+        ];
+
+        if ($serviceFee > 0) {
+            $itemDetails[] = [
+                'id' => 'SERVICE_FEE',
+                'price' => $serviceFee,
+                'quantity' => 1,
+                'name' => 'Biaya layanan',
+            ];
+        }
+
+        if ($insuranceFee > 0) {
+            $itemDetails[] = [
+                'id' => 'INSURANCE',
+                'price' => $insuranceFee,
+                'quantity' => 1,
+                'name' => 'Asuransi pengiriman',
+            ];
+        }
 
         // Guard: sum(item_details.price * quantity) HARUS persis sama dengan
         // gross_amount atau Midtrans menolak transaksinya. Kalau meleset
@@ -238,6 +348,11 @@ class OrderController extends Controller
         // Order. Guest checkout → user_id null. phone ikut disimpan di
         // shipping_address karena tabel orders tidak punya kolom phone.
         //
+        // shipping_address menyimpan alamat TERSTRUKTUR (untuk booking kurir
+        // otomatis di Langkah D) plus `address` gabungan siap tampil, supaya
+        // tampilan yang membaca `address` (order lama hanya punya
+        // name/phone/address) tetap jalan.
+        //
         // Race condition: kalau request lain dengan idempotency_key yang sama
         // menang duluan INSERT, unique index `orders.idempotency_key` menolak
         // yang ini. Laravel melempar UniqueConstraintViolationException; kalau
@@ -255,10 +370,17 @@ class OrderController extends Controller
                 'shipping_address' => [
                     'name' => $data['guest_name'],
                     'phone' => $data['phone'],
-                    'address' => $data['address'],
+                    'address' => $this->composeDisplayAddress($data),
+                    'address_detail' => $data['address_detail'],
+                    'courier_note' => $data['courier_note'] ?? null,
+                    'area_id' => $data['destination_area_id'],
+                    'area_label' => $data['area_label'],
+                    'postal_code' => $data['postal_code'] ?? null,
                 ],
                 'subtotal' => $subtotal,
                 'shipping_cost' => $shippingCost,
+                'service_fee' => $serviceFee,
+                'insurance_fee' => $insuranceFee,
                 'total' => $total,
                 'status' => OrderStatus::Pending,
             ]);
@@ -283,6 +405,28 @@ class OrderController extends Controller
                 'quantity' => $s['quantity'],
             ]);
         }
+
+        // Shipment: snapshot layanan kurir pilihan pembeli, satu baris per order,
+        // di transaksi yang sama (ikut rollback kalau Snap token gagal). Belum
+        // di-booking ke Biteship — itu Langkah D, setelah payment settlement.
+        $order->shipment()->create([
+            'courier' => $rate->courierCode,
+            'courier_name' => $rate->courierName,
+            'service_code' => $rate->serviceCode,
+            'service_name' => $rate->serviceName,
+            // cost = ongkir yang ditagih (= orders.shipping_cost, termasuk
+            // markup); provider_cost = tarif asli Biteship yang dibayar toko saat
+            // booking (Langkah D). Selisihnya margin toko.
+            'cost' => $rate->cost,
+            'provider_cost' => $rate->providerCost,
+            // Asuransi: null = tidak diasuransikan. insurance_value = nilai
+            // pertanggungan yang sama dengan courier_insurance saat cek tarif;
+            // dikirim lagi sebagai courier_insurance saat booking (Langkah D2).
+            'insurance_value' => $withInsurance ? CheckoutPricing::insuranceValue($snapshots) : null,
+            'insurance_fee' => $withInsurance ? $insuranceFee : null,
+            'etd' => $rate->etd,
+            'status' => ShipmentStatus::Pending,
+        ]);
 
         // midtrans_order_id = order_number (1:1 untuk sekarang; belum ada logic
         // retry/regenerate token — di luar scope fase ini).
@@ -315,6 +459,26 @@ class OrderController extends Controller
             'snap_token' => $snapToken,
             'gross_amount' => $grossAmount,
         ];
+    }
+
+    /**
+     * Alamat gabungan siap tampil: alamat detail, label area, lalu catatan
+     * kurir (kalau ada) — satu per baris. Bentuk yang sama dengan yang dulu
+     * dikirim frontend di field `address` (sebelum Langkah C).
+     *
+     * @param  array<string, mixed>  $data  hasil StoreOrderRequest::validated()
+     */
+    private function composeDisplayAddress(array $data): string
+    {
+        $parts = [trim((string) $data['address_detail']), (string) $data['area_label']];
+
+        $note = trim((string) ($data['courier_note'] ?? ''));
+
+        if ($note !== '') {
+            $parts[] = "Catatan kurir: {$note}";
+        }
+
+        return implode("\n", $parts);
     }
 
     /**

@@ -56,20 +56,24 @@ Catatan: ini menggantikan simulasi frontend di Milestone 6 yang menampilkan
 radio-card VA / E-Wallet / QRIS / Kartu buatan sendiri. Simulasi itu bukan acuan
 alur produksi.
 
-### 1.3 `shipping_cost` di-hardcode `0` (sementara)
+### 1.3 Ongkir nyata dari Biteship (dulu di-hardcode `0`)
 
-`OrderController` menetapkan `shipping_cost = 0` dan `total = subtotal`. Biteship
-(API ongkir) belum terintegrasi, konsisten dengan catatan yang sudah ada di
-`apps/web/src/app/(main)/checkout/page.tsx`.
+Sampai Langkah C integrasi Biteship, `OrderController` menetapkan
+`shipping_cost = 0` dan `total = subtotal`; semua order production sebelum
+rilis itu tercatat dengan ongkir Rp 0 dan tanpa data kurir.
 
-**Wajib diganti** begitu Biteship terintegrasi — ongkir nyata harus masuk ke
-`total`, dan (kalau dipakai) ditambahkan sebagai baris tersendiri di
-`item_details` Midtrans supaya `sum(item_details) == gross_amount` tetap terjaga.
-Ada `TODO(biteship)` di kode pada titik ini.
+**Sejak Langkah C (selesai di kode, Oktober 2026)** ongkir tidak lagi 0:
+`OrderController` menghitung ulang ongkir layanan pilihan pembeli di backend,
+dan `total = subtotal + shipping_cost + service_fee`. Ongkir masuk sebagai baris
+`SHIPPING` di `item_details` Midtrans (plus `SERVICE_FEE` kalau biaya layanan >
+0), sehingga `sum(item_details) == gross_amount` (§2.2) tetap terjaga. Kalau
+angka yang dilihat pembeli berbeda dari hasil hitung ulang, order ditolak 422.
+`TODO(biteship)` di kode sudah dihapus.
 
-**Status (Oktober 2026):** ini akibat langsung di production — semua order
-tercatat dengan ongkir Rp 0 dan data kurir/jasa kirim kosong. Menjadi pekerjaan
-berikutnya dan **harus selesai sebelum situs dipublikasikan ke media**.
+Detail keputusan, urutan validasi, dan data yang disimpan ada di
+`docs/decisions/shipping-biteship.md` (§1.6, §1.7, §3 C). Berlaku di production
+setelah Langkah B + C dirilis bersamaan (lihat Checklist Pra-Deploy di dokumen
+itu).
 
 ### 1.4 Guest checkout only
 
@@ -139,6 +143,23 @@ Perubahan pendukung: `ProductVariantResource` (`apps/api`) kini mengekspos `id`
 varian (read-only) supaya frontend bisa mengirim `product_variant_id`; harga &
 nama tetap di-resolve ulang dari DB di backend (§2.1). `MockProductVariant`
 (`apps/web/src/lib/mock-products.ts`) ikut ditambah `id` agar kontrak tipe cocok.
+
+**Perbaikan setelah integrasi Biteship (Oktober 2026):**
+
+- `/checkout/payment` menandai snap.js siap lewat `<Script onReady>`, bukan
+  `onLoad`. `onLoad` hanya terpicu saat script pertama kali dimuat di tab itu,
+  sehingga checkout kedua lewat navigasi client-side (tanpa refresh) tersangkut
+  di "Menyiapkan pembayaran…". Popup tetap dibuka otomatis tepat sekali per
+  token per kunjungan halaman.
+- `onSuccess` dengan `transaction_status` selain `settlement`/`capture`, dan
+  semua `onPending`, diarahkan ke varian **"Menunggu Pembayaran"** di
+  `/checkout/success` (bukan "Pesanan Berhasil"). Varian itu punya tombol
+  **"Lanjutkan Pembayaran"** (hanya kalau `token` ada di URL) yang kembali ke
+  `/checkout/payment` dengan Snap token yang sama. Docs Snap menjamin token
+  boleh dibuka ulang selama belum kedaluwarsa (default 24 jam) dan menyebut
+  tampilan ulang untuk e-wallet/QRIS. **Asumsi:** untuk VA / transfer bank,
+  instruksi & nomor VA yang sudah dipilih juga tampil lagi — belum
+  terdokumentasi, perlu dicek di sandbox. Detail: `shipping-biteship.md` §1.11.
 
 ---
 

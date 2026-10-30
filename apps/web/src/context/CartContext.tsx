@@ -28,7 +28,9 @@ export interface CartItem {
   size: string;
   /** SKU varian — identitas unik item cart (produk + ukuran). */
   sku: string;
-  /** Harga string decimal dari API (mis. "850000.00"). */
+  /** Harga satuan EFEKTIF varian dari API (`variant.price`, mis. "850000.00")
+   *  — bukan base_price produk. Disegarkan dari backend lewat `syncPrices`
+   *  saat checkout memuat tarif, jadi tidak basi kalau admin mengubah harga. */
   basePrice: string;
   /** URL foto utama, atau null kalau produk belum punya foto. */
   image: string | null;
@@ -45,6 +47,11 @@ interface CartContextValue {
   updateQty: (sku: string, qty: number) => void;
   removeItem: (sku: string) => void;
   clearCart: () => void;
+  /**
+   * Timpa harga item dengan harga terbaru dari backend
+   * (product_variant_id → harga satuan). Item yang tidak ada di map dibiarkan.
+   */
+  syncPrices: (prices: Record<number, number | string>) => void;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -81,6 +88,31 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = useCallback(() => setItems([]), []);
 
+  const syncPrices = useCallback(
+    (prices: Record<number, number | string>) => {
+      setItems((prev) => {
+        let changed = false;
+        const next = prev.map((i) => {
+          const fresh = prices[i.productVariantId];
+          // Bandingkan sebagai angka: "850000.00" dari API produk dan 850000
+          // dari meta tarif adalah harga yang sama — jangan dianggap berubah.
+          if (
+            fresh === undefined ||
+            Number(fresh) === Number.parseFloat(i.basePrice)
+          ) {
+            return i;
+          }
+          changed = true;
+          return { ...i, basePrice: String(fresh) };
+        });
+        // Kembalikan array LAMA kalau tidak ada yang berubah, supaya tidak
+        // memicu render ulang konsumen cart tanpa alasan.
+        return changed ? next : prev;
+      });
+    },
+    [],
+  );
+
   const count = useMemo(
     () => items.reduce((sum, i) => sum + i.qty, 0),
     [items],
@@ -104,8 +136,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       updateQty,
       removeItem,
       clearCart,
+      syncPrices,
     }),
-    [items, count, subtotal, addItem, updateQty, removeItem, clearCart],
+    [
+      items,
+      count,
+      subtotal,
+      addItem,
+      updateQty,
+      removeItem,
+      clearCart,
+      syncPrices,
+    ],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

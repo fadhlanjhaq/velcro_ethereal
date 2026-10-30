@@ -12,12 +12,14 @@ class ProductController extends Controller
     /**
      * Daftar semua produk aktif. Eager load category/variants/images untuk
      * menghindari N+1 query (relasi images sudah orderBy sort_order di model).
+     * `variants.product` karena ProductVariantResource menghitung harga efektif
+     * (price_override ?? base_price) dari produk induknya.
      */
     public function index(): AnonymousResourceCollection
     {
         $products = Product::query()
             ->where('is_active', true)
-            ->with(['category', 'variants', 'images'])
+            ->with(['category', 'variants.product', 'images'])
             ->orderBy('id')
             ->get();
 
@@ -33,7 +35,7 @@ class ProductController extends Controller
         $product = Product::query()
             ->where('slug', $slug)
             ->where('is_active', true)
-            ->with(['category', 'variants', 'images'])
+            ->with(['category', 'variants.product', 'images'])
             ->firstOrFail();
 
         return new ProductResource($product);

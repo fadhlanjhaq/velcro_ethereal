@@ -38,7 +38,9 @@ export default function ProductPurchasePanel({
       name: product.name,
       size: selectedVariant.size,
       sku: selectedVariant.sku,
-      basePrice: product.base_price,
+      // Harga efektif varian (bisa beda dari base_price kalau ada
+      // price_override) — angka yang sama dengan yang ditagih backend.
+      basePrice: selectedVariant.price,
       image: product.images[0]?.url ?? null,
     });
     setAdded(true);
@@ -49,7 +51,7 @@ export default function ProductPurchasePanel({
   return (
     <div>
       <p className="font-serif text-3xl font-medium text-gold">
-        {formatRupiah(product.base_price)}
+        {formatRupiah(selectedVariant?.price ?? product.base_price)}
       </p>
 
       {variants.length > 0 && (

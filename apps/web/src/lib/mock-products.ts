@@ -37,6 +37,9 @@ export interface MockProductVariant {
   size: string;
   sku: string;
   stock: number;
+  /** Harga satuan EFEKTIF varian (price_override ?? base_price), string
+   *  decimal seperti base_price. Ini yang dipakai cart, bukan base_price. */
+  price: string;
 }
 
 export interface MockProductImage {
@@ -79,6 +82,8 @@ function buildVariants(skuInitials: string): MockProductVariant[] {
     size,
     sku: `VE-${skuInitials}-${size}`,
     stock: 10,
+    // Mock tidak punya price_override → harga efektif = base_price.
+    price: PLACEHOLDER_BASE_PRICE,
   }));
 }
 
