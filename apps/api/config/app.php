@@ -56,20 +56,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Admin Email
+    | Admin Emails
     |--------------------------------------------------------------------------
     |
-    | Satu-satunya email yang boleh masuk panel Filament (lihat
-    | User::canAccessPanel). Sengaja lewat env, bukan hardcode: alamatnya tidak
-    | ikut ter-commit, dan menggantinya cukup dengan mengubah .env lalu
-    | `config:clear` — tanpa perlu build ulang image.
+    | Daftar email yang boleh masuk panel Filament (lihat User::canAccessPanel),
+    | dari env ADMIN_EMAIL dipisah koma, mis. "a@x.com, b@x.com". Tiap item
+    | di-trim dan di-lowercase; item kosong dibuang. Sengaja lewat env, bukan
+    | hardcode: alamatnya tidak ikut ter-commit dan bisa diganti tanpa build
+    | ulang image.
     |
-    | Dibiarkan null kalau tidak diset, dan itu menutup akses untuk semua orang
-    | (fail closed) karena tidak ada email user yang bisa cocok dengan null.
+    | ADMIN_EMAIL kosong / tidak diset = array kosong = TIDAK ADA yang bisa
+    | masuk (fail closed).
+    |
+    | Setelah mengubah .env, container api harus di-RECREATE
+    | (`up -d --force-recreate api`) — env_file hanya dibaca saat container
+    | dibuat, restart saja tidak cukup. Kalau config pernah di-cache, jalankan
+    | `config:clear` atau `config:cache` ulang.
+    |
+    | Hasilnya array biasa (bukan closure) supaya aman untuk `config:cache`.
     |
     */
 
-    'admin_email' => env('ADMIN_EMAIL'),
+    'admin_emails' => array_values(array_filter(
+        array_map(
+            fn (string $email): string => strtolower(trim($email)),
+            explode(',', (string) env('ADMIN_EMAIL', '')),
+        ),
+        fn (string $email): bool => $email !== '',
+    )),
 
     /*
     |--------------------------------------------------------------------------

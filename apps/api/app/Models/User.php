@@ -41,14 +41,27 @@ class User extends Authenticatable implements FilamentUser
      * pengecekannya langsung return true) — padahal tabel yang sama dipakai
      * pelanggan storefront.
      *
-     * Alamatnya dibaca dari config, bukan ditulis di sini, supaya tidak ikut
+     * Yang boleh masuk hanya user yang emailnya ada di daftar
+     * config('app.admin_emails') — dari env ADMIN_EMAIL (dipisah koma, sudah
+     * di-trim + lowercase di config/app.php). Email user ikut dinormalisasi
+     * supaya beda huruf besar/kecil atau spasi tidak menolak admin yang sah.
+     *
+     * Daftar dibaca dari config, bukan ditulis di sini, supaya tidak ikut
      * ter-commit dan bisa diganti lewat .env tanpa build ulang image. Kalau
-     * ADMIN_EMAIL tidak diset, config bernilai null dan tidak ada yang bisa
-     * masuk — gagal ke arah tertutup, bukan terbuka.
+     * ADMIN_EMAIL kosong (atau config bukan array), tidak ada yang bisa masuk —
+     * gagal ke arah tertutup, bukan terbuka.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->email === config('app.admin_email');
+        $allowed = config('app.admin_emails', []);
+
+        if (! is_array($allowed) || $allowed === []) {
+            return false;
+        }
+
+        $email = strtolower(trim((string) $this->email));
+
+        return in_array($email, $allowed, true);
     }
 
     public function addresses(): HasMany
