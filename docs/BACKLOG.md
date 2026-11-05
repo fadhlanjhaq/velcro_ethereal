@@ -6,8 +6,14 @@ catatannya ke `docs/MILESTONES.md` dan hapus dari sini. Keputusan teknis detail
 pembayaran ada di `docs/decisions/payments-midtrans.md`.
 
 Urutan di bawah adalah urutan pengerjaan yang disepakati. Blok A wajib selesai
-**sebelum situs dipublikasikan ke media** (termasuk membuka tombol "Website
-Utama" di `/info`).
+**sebelum situs dipublikasikan ke media**.
+
+Status per **5 November 2026**:
+- Ongkir via Biteship (A.4): **selesai**.
+- Halaman legal (A.1), rate limiting (A.2), backup DB (A.3): **ditunda ke next
+  update** (masih open).
+- Tombol Website di `/info`: **dibuka lebih awal atas keputusan owner** (5 Nov
+  2026), label "Website Kami", link internal ke `/`.
 
 ## A. Wajib sebelum publikasi ke media
 
@@ -69,6 +75,8 @@ Utama" di `/info`).
   `my.cnf` dan penyesuaian di server bisa berbeda dari repo; cek drift sebelum
   `git pull` di VPS.
 - RAM VPS ~957 Mi: pantau saat queue worker/email ditambahkan.
-- `/info` tombol "Website Utama" masih disabled; buka setelah blok A selesai.
+- `/info` tombol Website sudah dibuka lebih awal atas keputusan owner (5 Nov
+  2026), label "Website Kami", link ke `/`; sisa blok A (legal, rate limiting,
+  backup DB) ditunda ke next update.
 - Fase berikutnya setelah semua di atas: penyempurnaan UI/UX dan visual
   (`docs/design-handoff/`).

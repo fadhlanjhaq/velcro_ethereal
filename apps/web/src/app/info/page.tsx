@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
+import { FaGlobe } from "react-icons/fa";
 import { SiWhatsapp, SiShopee, SiTiktok } from "react-icons/si";
 
 /**
@@ -18,8 +20,8 @@ import { SiWhatsapp, SiShopee, SiTiktok } from "react-icons/si";
  *
  * CATATAN LINK: whatsapp/shopee/tiktok di bawah masih PLACEHOLDER menunggu data
  * asli dari client (shopee & whatsapp dari brief, tiktok belum diberikan).
- * Tombol "Website Utama" sengaja non-aktif karena situs utama masih prototipe/
- * simulasi (checkout belum terima transaksi sungguhan — lihat Milestone 6).
+ * Tombol "Website Kami" aktif (dibuka atas keputusan owner, 5 Nov 2026): link
+ * internal ke homepage "/" lewat next/link, buka di tab yang sama.
  */
 
 // ── Ubah link di sini ────────────────────────────────────────────────────────
@@ -32,7 +34,7 @@ const LINKS = {
 export const metadata: Metadata = {
   title: "Velcro Ethereal — Info",
   description:
-    "Hubungi dan belanja Velcro Ethereal — Luxury Heritage Streetwear. WhatsApp, Shopee, dan TikTok resmi.",
+    "Hubungi dan belanja Velcro Ethereal — Luxury Heritage Streetwear. Website, WhatsApp, Shopee, dan TikTok resmi.",
 };
 
 type ActiveLink = {
@@ -46,6 +48,13 @@ const ACTIVE_LINKS: ActiveLink[] = [
   { label: "Ikuti di TikTok", href: LINKS.tiktok, Icon: SiTiktok },
   { label: "Hubungi via WhatsApp", href: LINKS.whatsapp, Icon: SiWhatsapp },
 ];
+
+// Class bersama semua tombol aktif (Website Kami + tautan eksternal) —
+// fill solid ink-soft + aksen gold, ikon gold yang berubah ink saat hover.
+const ACTIVE_BUTTON_CLASS =
+  "group ve-fade-in flex w-full items-center justify-center gap-3 rounded-full border border-gold/30 bg-ink-soft px-6 py-4 text-sm font-medium tracking-wide text-cream transition-colors duration-200 hover:border-gold hover:bg-gold hover:text-ink min-[900px]:text-[15px]";
+const ACTIVE_ICON_CLASS =
+  "text-lg text-gold transition-colors duration-200 group-hover:text-ink";
 
 // Overlay gelap di atas foto background: terang di atas (foto masih terbaca),
 // makin pekat ke bawah supaya tombol & teks kontras.
@@ -138,31 +147,28 @@ export default function InfoPage() {
             seluruh blok konten dipusatkan sebagai satu kesatuan lewat
             justify-center di container kolom, bukan dipisah grup atas/bawah. ── */}
         <nav className="mt-8 flex w-full flex-col gap-3 min-[900px]:mt-10 min-[900px]:max-w-[400px]">
-          {/* a. Website Utama — non-aktif (situs utama masih prototipe/simulasi) */}
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            className="ve-fade-in flex w-full items-center justify-center gap-2 rounded-full border border-cream/15 px-6 py-4 text-sm font-medium tracking-wide text-cream/40 min-[900px]:text-[15px]"
+          {/* a. Website Kami — link internal ke homepage "/" (next/link, tab
+              yang sama), style identik dengan tombol aktif lainnya */}
+          <Link
+            href="/"
+            className={ACTIVE_BUTTON_CLASS}
             style={{ animationDelay: "0.08s" }}
           >
-            <span>Website</span>
-            <span className="rounded-full border border-cream/20 px-2 py-0.5 text-[0.6rem] uppercase tracking-[0.18em] text-cream/50">
-              Coming Soon
-            </span>
-          </button>
+            <FaGlobe className={ACTIVE_ICON_CLASS} aria-hidden />
+            <span>Website Kami</span>
+          </Link>
 
-          {/* b–d. Tombol aktif — fill solid ink-soft + aksen gold */}
+          {/* b–d. Tautan eksternal — fill solid ink-soft + aksen gold */}
           {ACTIVE_LINKS.map(({ label, href, Icon }, i) => (
             <a
               key={label}
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="group ve-fade-in flex w-full items-center justify-center gap-3 rounded-full border border-gold/30 bg-ink-soft px-6 py-4 text-sm font-medium tracking-wide text-cream transition-colors duration-200 hover:border-gold hover:bg-gold hover:text-ink min-[900px]:text-[15px]"
+              className={ACTIVE_BUTTON_CLASS}
               style={{ animationDelay: `${0.16 + i * 0.08}s` }}
             >
-              <Icon className="text-lg text-gold transition-colors duration-200 group-hover:text-ink" aria-hidden />
+              <Icon className={ACTIVE_ICON_CLASS} aria-hidden />
               <span>{label}</span>
             </a>
           ))}

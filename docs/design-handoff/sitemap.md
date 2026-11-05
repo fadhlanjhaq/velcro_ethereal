@@ -96,16 +96,14 @@ image web; lihat `docs/deploy.md`).
 ### `/info` — Link-in-bio
 - Server Component, berdiri sendiri (di luar route group `(main)`) — **tidak
   mewarisi SiteHeader/SiteFooter/cart**. Dibuka lewat bio Instagram.
-- Isi: logo, 1 foto produk, tagline, 4 tombol (Website Utama — **masih
-  disabled**, WhatsApp, Shopee, TikTok — 3 tombol terakhir aktif
-  `<a target="_blank">`).
+- Isi: logo, 1 foto produk, tagline, 4 tombol aktif dengan style identik,
+  urutan: Website Kami, Shopee, TikTok, WhatsApp. "Website Kami" = link
+  internal ke `/` (`next/link`, tab yang sama); 3 tombol lainnya
+  `<a target="_blank" rel="noopener noreferrer">`.
 - Link WhatsApp & Shopee dari brief client; **link TikTok masih placeholder**
   (`@velcroethereal`, belum dikonfirmasi client — lihat komentar di kode).
-- **LIVE**. Tombol "Website Utama" masih **DISABLED** (badge "Coming Soon").
-  Alasan awalnya (situs utama masih simulasi) sudah tidak berlaku sejak
-  checkout live, tetapi tombol sengaja belum dibuka sampai ongkir dan email
-  konfirmasi selesai dan situs siap dipublikasikan ke media (lihat
-  `docs/BACKLOG.md`).
+- **LIVE**. Tombol Website **aktif** sejak 5 Nov 2026 (dibuka lebih awal atas
+  keputusan owner; badge "Coming Soon" dihapus). Lihat `docs/BACKLOG.md`.
 
 ### `/coming-soon` — Gate produksi
 - Server Component, berdiri sendiri (di luar route group `(main)`).
