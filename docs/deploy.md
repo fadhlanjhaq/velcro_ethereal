@@ -91,6 +91,67 @@ Jangan pakai `php artisan config:show` untuk ini: akan mencetak server key.
 Cek `env | grep MIDTRANS` di dalam container juga menyesatkan karena Laravel
 membaca `.env` sebagai file.
 
+## Akses admin (ADMIN_EMAIL)
+
+Yang boleh masuk `/admin` hanya email yang tercantum di `ADMIN_EMAIL` pada
+`apps/api/.env` server, dipisah koma (mis. `a@contoh.com,b@contoh.com`).
+Spasi dan huruf besar/kecil diabaikan. **Kosong = tidak ada yang bisa masuk**
+(fail closed). Akun dan aksesnya terpisah: punya akun belum berarti boleh
+masuk, dan email di `ADMIN_EMAIL` tanpa akun juga tidak bisa login.
+
+Menambah admin:
+
+1. Buat akun (password acak dicetak **sekali**; simpan, lalu `clear`):
+
+   ```bash
+   $C exec -e HOME=/tmp api php artisan admin:user email@contoh.com --name="Nama Admin"
+   ```
+
+2. Tambahkan email itu ke `ADMIN_EMAIL` di `.env` server.
+3. Recreate api, lalu restart proxy:
+
+   ```bash
+   $C up -d --force-recreate api
+   $C restart proxy
+   ```
+
+Reset password: jalankan `admin:user` yang sama untuk email yang **sudah
+terdaftar** di `ADMIN_EMAIL` (`--name` diabaikan, ada konfirmasi). Email yang
+tidak terdaftar ditolak, supaya command ini tidak bisa mengambil alih akun
+pelanggan.
+
+Password sendiri (opsional): tambahkan `--set-password` untuk mengetik
+password lewat input tersembunyi (diminta dua kali, tidak dicetak) alih-alih
+password acak. Berlaku untuk akun baru maupun reset:
+
+```bash
+# Akun baru
+$C exec -e HOME=/tmp api php artisan admin:user email@contoh.com --name="Nama Admin" --set-password
+
+# Reset password akun admin terdaftar
+$C exec -e HOME=/tmp api php artisan admin:user email@contoh.com --set-password
+```
+
+- Minimal 12 karakter, maksimal 72 byte (batas bcrypt; huruf non-ASCII
+  seperti emoji memakai lebih dari 1 byte).
+- **Jangan pernah** menulis password sebagai argumen command (mis.
+  `--set-password=rahasia`): akan tersimpan di shell history. Opsi ini memang
+  tidak menerima nilai.
+- Jalankan interaktif: `$C exec` biasa, **tanpa `-T`**. Tanpa terminal,
+  password tidak bisa dibaca dan command gagal tanpa mengubah apa pun.
+
+Mencabut akses: hapus email dari `ADMIN_EMAIL`, lalu recreate api dan restart
+proxy seperti langkah 3. Akunnya tetap ada, hanya tidak bisa masuk `/admin`.
+
+Kalau perubahan `ADMIN_EMAIL` tidak berpengaruh, cek apakah config pernah
+di-cache:
+
+```bash
+$C exec api ls bootstrap/cache/config.php
+```
+
+Kalau file itu ada, jalankan `$C exec api php artisan config:clear`.
+
 ## 5. Dashboard Midtrans (production)
 
 Settings → Payment → **Payment notification URL**:
