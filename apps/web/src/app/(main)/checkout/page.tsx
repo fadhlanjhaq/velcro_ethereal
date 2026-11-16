@@ -38,9 +38,20 @@
  * docs/decisions/shipping-biteship.md.
  */
 
-import { useEffect, useId, useMemo, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type Lenis from "lenis";
 import {
   formatRupiah,
   getShippingRates,
@@ -53,6 +64,7 @@ import {
   type ShippingRate,
 } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
+import { useLenis } from "@/components/SmoothScrollProvider";
 
 const ICON = {
   clock: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
@@ -109,6 +121,98 @@ type RatesResult =
 
 type RatesStatus = "idle" | "loading" | "error" | "success";
 
+// Field yang divalidasi di sisi client sebelum submit. Urutan array = urutan
+// tampil di form = urutan pemilihan field pertama yang difokuskan.
+type FieldKey = "name" | "email" | "phone" | "area" | "addressDetail";
+type FieldErrors = Partial<Record<FieldKey, string>>;
+
+const FIELD_ORDER: FieldKey[] = [
+  "name",
+  "email",
+  "phone",
+  "area",
+  "addressDetail",
+];
+
+// id elemen input per field (target scroll + fokus).
+const FIELD_ELEMENT_ID: Record<FieldKey, string> = {
+  name: "name",
+  email: "email",
+  phone: "phone",
+  area: "area",
+  addressDetail: "address-detail",
+};
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Ringkasan pesanan sticky HANYA di lg DAN tinggi viewport ≥ 600px. Di bawah
+// itu tampil normal: tidak sticky, tanpa max-height, tanpa scroll internal.
+// Offset memakai --site-header-h yang ditulis SiteHeader (fallback 96px).
+const SUMMARY_STICKY_ASIDE =
+  "lg:[@media(min-height:600px)]:sticky lg:[@media(min-height:600px)]:top-[calc(var(--site-header-h,96px)_+_24px)]";
+const SUMMARY_STICKY_CARD =
+  "lg:[@media(min-height:600px)]:max-h-[calc(100dvh_-_var(--site-header-h,96px)_-_48px)]";
+const SUMMARY_SCROLL_AREA =
+  "lg:[@media(min-height:600px)]:min-h-0 lg:[@media(min-height:600px)]:flex-1 lg:[@media(min-height:600px)]:overflow-y-auto lg:[@media(min-height:600px)]:pr-2";
+
+/**
+ * Scroll elemen ke kira-kira tengah layar (tidak pernah tertutup header
+ * fixed), lalu fokus tanpa memicu scroll native kedua. Lenis dipakai kalau
+ * aktif; kalau tidak (reduced-motion / di luar provider) → scrollIntoView.
+ */
+function scrollToElement(
+  el: HTMLElement,
+  lenis: Lenis | null | undefined,
+  { focus = true }: { focus?: boolean } = {},
+) {
+  const headerH =
+    parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        "--site-header-h",
+      ),
+    ) || 96;
+  const offset = -Math.max(
+    headerH + 32,
+    (window.innerHeight - el.offsetHeight) / 2,
+  );
+
+  if (lenis) {
+    lenis.scrollTo(el, { offset });
+  } else {
+    el.scrollIntoView({ block: "center" });
+  }
+
+  if (focus) el.focus({ preventScroll: true });
+}
+
+const SHEET_ID = "checkout-summary-sheet";
+const SHEET_TITLE_ID = "checkout-summary-sheet-title";
+const DESKTOP_MEDIA = "(min-width: 1024px)";
+
+// Kunci / buka scroll halaman (Lenis + native) untuk bottom sheet. Dipanggil
+// dari effect sheet, dan langsung dari handleSubmit saat sheet harus ditutup
+// sebelum scroll ke field (Lenis yang masih stop() tidak mau men-scroll).
+function lockPageScroll(lenis: Lenis | null | undefined) {
+  lenis?.stop();
+  document.documentElement.style.overflow = "hidden";
+}
+
+function unlockPageScroll(lenis: Lenis | null | undefined) {
+  lenis?.start();
+  document.documentElement.style.overflow = "";
+}
+
+// true hanya di client setelah hydrate — syarat aman untuk createPortal ke
+// document.body tanpa hydration mismatch.
+const noopSubscribe = () => () => {};
+function useIsClient() {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, subtotal, count, syncPrices } = useCart();
@@ -132,6 +236,106 @@ export default function CheckoutPage() {
   const [ratesRetry, setRatesRetry] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const lenisRef = useLenis();
+
+  // --- Mobile: bar bawah + bottom sheet ringkasan ---------------------------
+  const isClient = useIsClient();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // Elemen bar disimpan lewat callback ref (state), bukan useRef: bar baru
+  // ter-render setelah cart terisi, jadi effect harus jalan ulang saat itu.
+  const [mobileBar, setMobileBar] = useState<HTMLDivElement | null>(null);
+  const openSheetButtonRef = useRef<HTMLButtonElement>(null);
+  const sheetCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const sheetWasOpenRef = useRef(false);
+  // Diset saat sheet ditutup karena validasi gagal: fokus pindah ke field
+  // yang salah, bukan kembali ke tombol "Lihat ringkasan".
+  const skipSheetFocusReturnRef = useRef(false);
+
+  // Konten paling bawah halaman tidak boleh tertutup bar fixed. Di lg bar
+  // display:none → tinggi 0 → padding 0.
+  useEffect(() => {
+    if (!mobileBar) return;
+    const body = document.body;
+    const write = () => {
+      body.style.paddingBottom = `${mobileBar.offsetHeight}px`;
+    };
+    write();
+    const observer = new ResizeObserver(write);
+    observer.observe(mobileBar);
+    return () => {
+      observer.disconnect();
+      body.style.paddingBottom = "";
+    };
+  }, [mobileBar]);
+
+  // Sheet terbuka: kunci scroll, Escape menutup, dan tutup otomatis kalau
+  // viewport melebar ke lg (ringkasan desktop mengambil alih).
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const lenis = lenisRef?.current;
+    lockPageScroll(lenis);
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setSheetOpen(false);
+    }
+    const desktop = window.matchMedia(DESKTOP_MEDIA);
+    function onMediaChange(event: MediaQueryListEvent) {
+      if (event.matches) setSheetOpen(false);
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    desktop.addEventListener("change", onMediaChange);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      desktop.removeEventListener("change", onMediaChange);
+      unlockPageScroll(lenis);
+    };
+  }, [sheetOpen, lenisRef]);
+
+  // Fokus: buka → tombol X; tutup → kembali ke tombol "Lihat ringkasan".
+  useEffect(() => {
+    if (sheetOpen) {
+      sheetWasOpenRef.current = true;
+      sheetCloseButtonRef.current?.focus();
+      return;
+    }
+    if (!sheetWasOpenRef.current) return;
+    sheetWasOpenRef.current = false;
+    if (skipSheetFocusReturnRef.current) {
+      skipSheetFocusReturnRef.current = false;
+      return;
+    }
+    openSheetButtonRef.current?.focus();
+  }, [sheetOpen]);
+
+  /**
+   * Scroll + fokus ke elemen bermasalah. Kalau submit datang dari sheet,
+   * sheet ditutup DULU dan scroll page dibuka langsung (bukan menunggu
+   * effect), lalu scroll dijalankan di frame berikutnya.
+   */
+  function revealInvalid(el: HTMLElement, options?: { focus?: boolean }) {
+    if (!sheetOpen) {
+      scrollToElement(el, lenisRef?.current, options);
+      return;
+    }
+    skipSheetFocusReturnRef.current = true;
+    unlockPageScroll(lenisRef?.current);
+    setSheetOpen(false);
+    requestAnimationFrame(() => {
+      scrollToElement(el, lenisRef?.current, options);
+    });
+  }
+
+  // Error satu field dihapus begitu field itu diubah.
+  function clearFieldError(key: FieldKey) {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
 
   // Satu idempotency key per page load (lazy initializer → tidak di-generate
   // ulang tiap render). Retry submit setelah gagal mengirim key yang SAMA
@@ -260,20 +464,15 @@ export default function CheckoutPage() {
   // expected_total.
   const total = displaySubtotal + shippingCost + serviceFee + insuranceFee;
 
-  // Alasan pertama yang menahan tombol submit — ditampilkan sebagai teks bantu.
-  let blockReason: string | null = null;
-  if (!selectedArea) {
-    blockReason = "Pilih area tujuan dari daftar terlebih dahulu.";
-  } else if (form.addressDetail.trim() === "") {
-    blockReason = "Isi alamat detail pengiriman.";
-  } else if (ratesStatus === "loading") {
-    blockReason = "Menunggu pilihan pengiriman dimuat…";
-  } else if (ratesStatus === "error") {
-    blockReason = "Ongkir gagal dimuat. Tekan “Coba lagi” di atas.";
-  } else if (!selectedRate) {
-    blockReason = "Belum ada layanan pengiriman ke area ini.";
-  }
-  const canSubmit = blockReason === null && !isSubmitting;
+  // Tombol submit hanya dinonaktifkan selama proses berjalan / ongkir dimuat.
+  // Kekurangan lain (field kosong, pengiriman bermasalah) ditangani validasi
+  // di handleSubmit, yang menandai field dan membawa pembeli ke sana.
+  const submitDisabled = isSubmitting || ratesStatus === "loading";
+  const submitLabel = isSubmitting
+    ? "Memproses…"
+    : ratesStatus === "loading"
+      ? "Memuat ongkir…"
+      : "Lanjut ke Pembayaran";
 
   let shippingHint = "Pilih layanan pengiriman";
   if (!selectedArea) shippingHint = "Pilih area tujuan";
@@ -281,10 +480,55 @@ export default function CheckoutPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Enter di input tetap bisa memicu submit walau tombol disabled.
+    if (submitDisabled) return;
+
+    // Validasi client: tandai SEMUA field yang salah, fokuskan yang pertama.
+    const errors: FieldErrors = {};
+    if (form.name.trim() === "") {
+      errors.name = "Nama penerima wajib diisi.";
+    }
+    const email = form.email.trim();
+    if (email === "") {
+      errors.email = "Email wajib diisi.";
+    } else if (!EMAIL_PATTERN.test(email)) {
+      errors.email = "Format email tidak valid.";
+    }
+    // Format nomor telepon tetap divalidasi backend.
+    if (form.phone.trim() === "") {
+      errors.phone = "Nomor telepon wajib diisi.";
+    }
+    if (!selectedArea) {
+      errors.area = "Pilih area tujuan dari daftar.";
+    }
+    if (form.addressDetail.trim() === "") {
+      errors.addressDetail = "Alamat detail wajib diisi.";
+    }
+    setFieldErrors(errors);
+
+    const firstInvalid = FIELD_ORDER.find((key) => errors[key]);
+    if (firstInvalid) {
+      const el = document.getElementById(FIELD_ELEMENT_ID[firstInvalid]);
+      if (el) revealInvalid(el);
+      return;
+    }
+
+    // Field lengkap tapi pengiriman bermasalah → bawa ke section pengiriman
+    // (pesannya sudah tampil di sana).
+    if (
+      ratesStatus === "error" ||
+      (ratesStatus === "success" && rates.length === 0) ||
+      !selectedRate
+    ) {
+      const section = document.getElementById("shipping-method");
+      if (section) revealInvalid(section, { focus: false });
+      return;
+    }
+
     // quoteSubtotal pasti ada kalau selectedRate ada (keduanya dari tarif
     // sukses yang sama) — dicek eksplisit supaya expected_total tidak pernah
     // dihitung dari harga cart.
-    if (!canSubmit || !selectedArea || !selectedRate || quoteSubtotal === null) {
+    if (!selectedArea || !selectedRate || quoteSubtotal === null) {
       return;
     }
 
@@ -297,9 +541,9 @@ export default function CheckoutPage() {
       const courierNote = form.courierNote.trim();
       const { order_number, snap_token, gross_amount } = await postOrder({
         idempotency_key: idempotencyKey,
-        guest_name: form.name,
-        guest_email: form.email,
-        phone: form.phone,
+        guest_name: form.name.trim(),
+        guest_email: form.email.trim(),
+        phone: form.phone.trim(),
         address_detail: form.addressDetail.trim(),
         courier_note: courierNote === "" ? null : courierNote,
         destination_area_id: selectedArea.id,
@@ -369,6 +613,31 @@ export default function CheckoutPage() {
     );
   }
 
+  // Props bersama untuk ringkasan desktop & sheet, dan untuk kedua checkbox
+  // asuransi (footer desktop & bawah pilihan kurir di mobile).
+  const summaryProps: SummaryProps = {
+    items,
+    count,
+    quoteLineTotals,
+    displaySubtotal,
+    selectedRate,
+    shippingHint,
+    serviceFee,
+    withInsurance,
+    insuranceFee,
+    total,
+  };
+  const insuranceProps = {
+    checked: withInsurance,
+    selectable: insuranceSelectable,
+    selectedRate,
+    coverage: quoteSubtotal ?? displaySubtotal,
+    onChange: (checked: boolean) => {
+      setWantsInsurance(checked);
+      setErrorMessage(null);
+    },
+  };
+
   return (
     <main className="flex-1 bg-ink px-6 pb-24 pt-28 text-cream sm:pt-36">
       <div className="mx-auto max-w-6xl">
@@ -376,7 +645,12 @@ export default function CheckoutPage() {
 
         <div className="grid gap-10 lg:grid-cols-12 lg:items-start lg:gap-14">
           {/* Form penerima + metode pengiriman */}
+          {/* noValidate: validasi native browser dimatikan, diganti validasi
+              custom di handleSubmit. Tombol submit ada di ringkasan (di luar
+              <form>) dan terhubung lewat atribut form="checkout-form". */}
           <form
+            id="checkout-form"
+            noValidate
             onSubmit={handleSubmit}
             className="flex flex-col gap-10 lg:col-span-7"
           >
@@ -388,7 +662,11 @@ export default function CheckoutPage() {
                 label="Nama Penerima"
                 placeholder="Masukkan nama lengkap Anda"
                 value={form.name}
-                onChange={(v) => setForm((f) => ({ ...f, name: v }))}
+                error={fieldErrors.name}
+                onChange={(v) => {
+                  setForm((f) => ({ ...f, name: v }));
+                  clearFieldError("name");
+                }}
               />
               <Field
                 id="email"
@@ -396,7 +674,11 @@ export default function CheckoutPage() {
                 type="email"
                 placeholder="nama@domain.com"
                 value={form.email}
-                onChange={(v) => setForm((f) => ({ ...f, email: v }))}
+                error={fieldErrors.email}
+                onChange={(v) => {
+                  setForm((f) => ({ ...f, email: v }));
+                  clearFieldError("email");
+                }}
               />
               <Field
                 id="phone"
@@ -404,12 +686,18 @@ export default function CheckoutPage() {
                 type="tel"
                 placeholder="+62 8..."
                 value={form.phone}
-                onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+                error={fieldErrors.phone}
+                onChange={(v) => {
+                  setForm((f) => ({ ...f, phone: v }));
+                  clearFieldError("phone");
+                }}
               />
               <AreaCombobox
                 selected={selectedArea}
+                error={fieldErrors.area}
                 onChange={(area) => {
                   setSelectedArea(area);
+                  if (area) clearFieldError("area");
                   // Pembeli mengubah pilihan → pesan penolakan lama tidak
                   // relevan lagi.
                   setErrorMessage(null);
@@ -428,12 +716,32 @@ export default function CheckoutPage() {
                   rows={3}
                   maxLength={ADDRESS_DETAIL_MAX}
                   value={form.addressDetail}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, addressDetail: e.target.value }))
+                  aria-invalid={fieldErrors.addressDetail ? true : undefined}
+                  aria-describedby={
+                    fieldErrors.addressDetail
+                      ? "address-detail-error"
+                      : undefined
                   }
-                  className="w-full resize-y rounded-sm border border-cream/20 bg-ink-soft px-4 py-3 text-sm text-cream placeholder:text-cream/40 focus:border-gold focus:outline-none"
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, addressDetail: e.target.value }));
+                    clearFieldError("addressDetail");
+                  }}
+                  className={[
+                    "w-full resize-y rounded-sm border bg-ink-soft px-4 py-3 text-sm text-cream placeholder:text-cream/40 focus:border-gold focus:outline-none",
+                    fieldErrors.addressDetail
+                      ? "border-red-400/60"
+                      : "border-cream/20",
+                  ].join(" ")}
                   placeholder="Nama jalan, nomor rumah, RT/RW, patokan"
                 />
+                {fieldErrors.addressDetail && (
+                  <p
+                    id="address-detail-error"
+                    className="text-[11px] text-red-300"
+                  >
+                    {fieldErrors.addressDetail}
+                  </p>
+                )}
               </div>
               <Field
                 id="courier-note"
@@ -446,7 +754,7 @@ export default function CheckoutPage() {
               />
             </section>
 
-            <section className="flex flex-col gap-5">
+            <section id="shipping-method" className="flex flex-col gap-5">
               <div className="flex items-baseline justify-between border-b border-cream/10 pb-2">
                 <h2 className="font-serif text-sm font-medium uppercase tracking-[0.28em] text-gold">
                   Pilih Metode Pengiriman
@@ -638,198 +946,481 @@ export default function CheckoutPage() {
                   })}
                 </div>
               )}
-            </section>
 
-            {errorMessage && (
-              <p
-                role="alert"
-                className="rounded-sm border border-red-400/40 bg-red-400/10 px-4 py-3 text-sm leading-relaxed text-cream/90"
-              >
-                {errorMessage}
-              </p>
-            )}
-
-            <div>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                aria-describedby={blockReason ? "submit-hint" : undefined}
-                className={[
-                  "w-full rounded-full px-8 py-4 text-sm font-medium uppercase tracking-[0.2em] transition-colors",
-                  !canSubmit
-                    ? "cursor-not-allowed border border-cream/20 text-cream/40"
-                    : "bg-gold text-ink hover:bg-gold-dark",
-                ].join(" ")}
-              >
-                {isSubmitting ? "Memproses…" : "Lanjut ke Pembayaran"}
-              </button>
-              {blockReason && !isSubmitting && (
-                <p
-                  id="submit-hint"
-                  className="mt-3 text-center text-[11px] text-cream/50"
-                >
-                  {blockReason}
-                </p>
+              {/* Mobile: asuransi di bawah pilihan kurir (di desktop ada di
+                  footer ringkasan). Hanya tampil kalau ada kartu kurir. */}
+              {ratesStatus === "success" && rates.length > 0 && (
+                <InsuranceOption
+                  {...insuranceProps}
+                  idPrefix="mobile"
+                  className="rounded-sm border border-cream/15 bg-ink-soft p-4 lg:hidden"
+                />
               )}
-              <p className="mt-4 flex items-center justify-center gap-3 text-[11px] text-cream/50">
-                <span className="flex items-center gap-1.5">
-                  <Icon d={ICON.shield} className="text-gold" />
-                  Enkripsi 256-bit Aman
-                </span>
-                <span aria-hidden="true">•</span>
-                <span>Garansi Keaslian 100%</span>
-              </p>
-            </div>
+            </section>
           </form>
 
-          {/* Ringkasan pesanan */}
-          <aside className="lg:sticky lg:top-24 lg:col-span-5 lg:h-fit">
-            <div className="rounded-sm border border-cream/10 bg-ink-soft p-6 lg:p-7">
-              <h2 className="border-b border-cream/10 pb-3 font-serif text-xs font-semibold uppercase tracking-[0.22em] text-gold">
+          {/* Ringkasan pesanan. Di lg + tinggi viewport ≥ 600px: sticky dan
+              dibatasi tinggi layar — header & footer kartu tetap, hanya daftar
+              item yang di-scroll. Di bawah itu tampil normal. */}
+          <aside
+            className={`hidden lg:col-span-5 lg:block lg:h-fit ${SUMMARY_STICKY_ASIDE}`}
+          >
+            <div
+              className={`flex flex-col rounded-sm border border-cream/10 bg-ink-soft p-6 lg:p-7 ${SUMMARY_STICKY_CARD}`}
+            >
+              {/* 1) Header tetap */}
+              <h2 className="shrink-0 border-b border-cream/10 pb-3 font-serif text-xs font-semibold uppercase tracking-[0.22em] text-gold">
                 Ringkasan Pesanan
               </h2>
 
-              <ul className="mt-6 flex flex-col gap-4">
-                {items.map((item) => (
-                  <li
-                    key={item.sku}
-                    className="flex items-start justify-between gap-4"
-                  >
-                    <div className="flex items-start gap-3.5">
-                      <span
-                        aria-hidden="true"
-                        className="flex h-14 w-12 shrink-0 items-center justify-center border border-cream/15 bg-ink font-serif text-[11px] text-gold/60"
-                      >
-                        {initials(item.name)}
-                      </span>
-                      <div>
-                        <p className="text-sm font-medium leading-snug text-cream">
-                          {item.name}
-                        </p>
-                        <p className="mt-1 text-xs text-cream/50">
-                          ({item.size}) × {item.qty}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold">
-                      {formatRupiah(
-                        String(
-                          quoteLineTotals?.get(item.productVariantId) ??
-                            Number.parseFloat(item.basePrice) * item.qty,
-                        ),
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              <dl className="mt-6 flex flex-col gap-3 border-t border-cream/10 pt-5 text-xs">
-                <div className="flex justify-between text-cream/60">
-                  <dt>Subtotal ({count} item)</dt>
-                  <dd className="font-medium text-cream">
-                    {formatRupiah(String(displaySubtotal))}
-                  </dd>
-                </div>
-                <div className="flex justify-between text-cream/60">
-                  <dt>
-                    Biaya Pengiriman
-                    <span className="block text-[10px] text-gold/80">
-                      {selectedRate
-                        ? `${selectedRate.courier_name} ${selectedRate.service_name}`
-                        : shippingHint}
-                    </span>
-                  </dt>
-                  <dd className="font-medium text-cream">
-                    {selectedRate
-                      ? formatRupiah(String(selectedRate.cost))
-                      : "—"}
-                  </dd>
-                </div>
-                {serviceFee > 0 && (
-                  <div className="flex justify-between text-cream/60">
-                    <dt>Biaya layanan</dt>
-                    <dd className="font-medium text-cream">
-                      {formatRupiah(String(serviceFee))}
-                    </dd>
-                  </div>
-                )}
-                {withInsurance && (
-                  <div className="flex justify-between text-cream/60">
-                    <dt>Asuransi pengiriman</dt>
-                    <dd className="font-medium text-cream">
-                      {formatRupiah(String(insuranceFee))}
-                    </dd>
-                  </div>
-                )}
-              </dl>
-
-              {/* Asuransi pengiriman — opsional, dibayar pembeli. Teks bantu
-                  sengaja hanya menyebut nilai pertanggungan & kebijakan kurir:
-                  cakupan klaim ditentukan kurir, bukan oleh toko. */}
-              <div className="mt-4 border-t border-cream/10 pt-4">
-                <label
-                  className={[
-                    "flex items-start gap-3 text-xs",
-                    insuranceSelectable
-                      ? "cursor-pointer"
-                      : "cursor-not-allowed opacity-60",
-                  ].join(" ")}
-                >
-                  <input
-                    type="checkbox"
-                    checked={withInsurance}
-                    disabled={!insuranceSelectable}
-                    aria-describedby="insurance-hint"
-                    onChange={(e) => {
-                      setWantsInsurance(e.target.checked);
-                      setErrorMessage(null);
-                    }}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-gold"
+              {/* 2) Area scroll + 3) footer tetap — lihat OrderSummaryContent */}
+              <OrderSummaryContent
+                {...summaryProps}
+                variant="desktop"
+                idPrefix="desktop"
+                insuranceSlot={
+                  <InsuranceOption
+                    {...insuranceProps}
+                    idPrefix="desktop"
+                    className="mt-4 border-t border-cream/10 pt-4"
                   />
-                  <span className="flex-1">
-                    <span className="flex justify-between gap-3 text-cream/80">
-                      <span>Tambah asuransi pengiriman</span>
-                      {insuranceSelectable && (
-                        <span className="font-medium text-cream">
-                          {formatRupiah(String(selectedRate?.insurance_fee ?? 0))}
-                        </span>
-                      )}
-                    </span>
-                    <span
-                      id="insurance-hint"
-                      className="mt-1 block text-[11px] leading-relaxed text-cream/50"
-                    >
-                      {!selectedRate
-                        ? "Pilih layanan pengiriman untuk melihat biaya asuransi."
-                        : !insuranceSelectable
-                          ? "Tidak tersedia untuk layanan ini"
-                          : `Nilai pertanggungan ${formatRupiah(String(quoteSubtotal ?? displaySubtotal))}. Ketentuan klaim mengikuti kebijakan kurir.`}
-                    </span>
-                  </span>
-                </label>
-              </div>
+                }
+                footerSlot={
+                  <>
+                    {errorMessage && (
+                      <p
+                        role="alert"
+                        className="mt-5 rounded-sm border border-red-400/40 bg-red-400/10 px-4 py-3 text-sm leading-relaxed text-cream/90"
+                      >
+                        {errorMessage}
+                      </p>
+                    )}
 
-              <div className="mt-5 flex items-baseline justify-between border-t border-cream/10 pt-5">
-                <span className="text-xs font-medium uppercase tracking-[0.22em] text-cream/60">
-                  Total Tagihan
-                </span>
-                <span className="font-serif text-2xl font-semibold tracking-wide text-gold">
-                  {formatRupiah(String(total))}
-                </span>
-              </div>
+                    <SubmitButton
+                      disabled={submitDisabled}
+                      label={submitLabel}
+                      className="mt-5"
+                    />
 
-              <p className="mt-6 flex items-start gap-2 border border-cream/10 bg-ink p-3.5 text-[11px] leading-relaxed text-cream/60">
-                <span aria-hidden="true" className="text-xs text-gold">
-                  ♦
-                </span>
-                Setiap busana dikemas eksklusif dengan kotak premium, dust bag
-                tahan debu, dan sertifikat nomor seri autentik.
-              </p>
+                    <p className="mt-4 flex items-center justify-center gap-3 text-[11px] text-cream/50">
+                      <span className="flex items-center gap-1.5">
+                        <Icon d={ICON.shield} className="text-gold" />
+                        Enkripsi 256-bit Aman
+                      </span>
+                      <span aria-hidden="true">•</span>
+                      <span>Garansi Keaslian 100%</span>
+                    </p>
+                  </>
+                }
+              />
             </div>
           </aside>
         </div>
       </div>
+
+      {/* Mobile (< lg): bar tetap di bawah — total, buka ringkasan, submit. */}
+      <div
+        ref={setMobileBar}
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-cream/10 bg-ink/95 px-6 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3 backdrop-blur-md lg:hidden"
+      >
+        {errorMessage && (
+          <p
+            role="alert"
+            className="mb-3 rounded-sm border border-red-400/40 bg-red-400/10 px-3 py-2 text-xs leading-relaxed text-cream/90"
+          >
+            {errorMessage}
+          </p>
+        )}
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-cream/60">
+              Total
+            </p>
+            <p className="font-serif text-xl font-semibold tracking-wide text-gold">
+              {formatRupiah(String(total))}
+            </p>
+          </div>
+          <button
+            ref={openSheetButtonRef}
+            type="button"
+            onClick={() => setSheetOpen(true)}
+            aria-expanded={sheetOpen}
+            aria-controls={SHEET_ID}
+            aria-haspopup="dialog"
+            className="shrink-0 text-xs font-medium text-cream/80 underline-offset-4 transition-colors hover:text-gold hover:underline"
+          >
+            Lihat ringkasan ({count} item){" "}
+            <span aria-hidden="true">▲</span>
+          </button>
+        </div>
+        <SubmitButton
+          disabled={submitDisabled}
+          label={submitLabel}
+          className="mt-3"
+        />
+      </div>
+
+      {/* Mobile: bottom sheet ringkasan (portal ke body, di atas header). */}
+      {isClient &&
+        createPortal(
+          <div
+            inert={!sheetOpen}
+            aria-hidden={sheetOpen ? undefined : true}
+            className={[
+              "fixed inset-0 z-[60] lg:hidden",
+              sheetOpen ? "" : "pointer-events-none",
+            ].join(" ")}
+          >
+            <div
+              aria-hidden="true"
+              onClick={() => setSheetOpen(false)}
+              className={[
+                "fixed inset-0 bg-black/60 transition-opacity duration-300",
+                sheetOpen ? "opacity-100" : "opacity-0",
+              ].join(" ")}
+            />
+            <div
+              id={SHEET_ID}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={SHEET_TITLE_ID}
+              className={[
+                "fixed inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-sm border-t border-cream/10 bg-ink-soft text-cream transition-transform duration-300",
+                sheetOpen ? "translate-y-0" : "translate-y-full",
+              ].join(" ")}
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-cream/10 px-6 py-4">
+                <h2
+                  id={SHEET_TITLE_ID}
+                  className="font-serif text-xs font-semibold uppercase tracking-[0.22em] text-gold"
+                >
+                  Ringkasan Pesanan
+                </h2>
+                <button
+                  ref={sheetCloseButtonRef}
+                  type="button"
+                  onClick={() => setSheetOpen(false)}
+                  aria-label="Tutup ringkasan"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-cream/20 text-cream transition-colors hover:border-gold hover:text-gold"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div
+                data-lenis-prevent
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5"
+              >
+                <OrderSummaryContent
+                  {...summaryProps}
+                  variant="sheet"
+                  idPrefix="sheet"
+                />
+              </div>
+
+              <div className="shrink-0 border-t border-cream/10 px-6 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-3">
+                {/* Error backend juga di sini: kalau submit dari sheet gagal,
+                    bar di bawah tertutup backdrop dan pesannya tak terlihat. */}
+                {errorMessage && (
+                  <p
+                    role="alert"
+                    className="mb-3 rounded-sm border border-red-400/40 bg-red-400/10 px-3 py-2 text-xs leading-relaxed text-cream/90"
+                  >
+                    {errorMessage}
+                  </p>
+                )}
+                <SubmitButton disabled={submitDisabled} label={submitLabel} />
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </main>
+  );
+}
+
+type SummaryProps = {
+  items: ReturnType<typeof useCart>["items"];
+  count: number;
+  quoteLineTotals: Map<number, number> | null;
+  displaySubtotal: number;
+  selectedRate: ShippingRate | null;
+  shippingHint: string;
+  serviceFee: number;
+  withInsurance: boolean;
+  insuranceFee: number;
+  total: number;
+};
+
+/**
+ * Isi ringkasan pesanan: daftar item, catatan kemasan, rincian biaya, total.
+ *
+ * - "desktop": dua bagian — area scroll (item + catatan) dan footer tetap
+ *   (rincian, `insuranceSlot`, total, `footerSlot`), sesuai kartu sticky.
+ * - "sheet": satu alur biasa (sheet punya area scroll sendiri). Tanpa checkbox
+ *   asuransi; baris asuransi di rincian tetap tampil kalau dicentang.
+ *
+ * `idPrefix` memberi namespace id di dalamnya supaya dua versi yang ter-render
+ * bersamaan tidak menghasilkan id ganda.
+ */
+function OrderSummaryContent({
+  variant,
+  idPrefix,
+  insuranceSlot,
+  footerSlot,
+  ...data
+}: SummaryProps & {
+  variant: "desktop" | "sheet";
+  idPrefix: string;
+  insuranceSlot?: ReactNode;
+  footerSlot?: ReactNode;
+}) {
+  const itemList = (
+    <>
+      <ul className="flex flex-col gap-4">
+        {data.items.map((item) => (
+          <li
+            key={item.sku}
+            className="flex items-start justify-between gap-4"
+          >
+            <div className="flex items-start gap-3.5">
+              {item.image ? (
+                <span className="relative h-14 w-12 shrink-0 overflow-hidden border border-cream/15 bg-ink">
+                  <Image
+                    src={item.image}
+                    alt={`${item.name} (${item.size})`}
+                    fill
+                    sizes="48px"
+                    className="object-cover"
+                  />
+                </span>
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="flex h-14 w-12 shrink-0 items-center justify-center border border-cream/15 bg-ink font-serif text-[11px] text-gold/60"
+                >
+                  {initials(item.name)}
+                </span>
+              )}
+              <div>
+                <p className="text-sm font-medium leading-snug text-cream">
+                  {item.name}
+                </p>
+                <p className="mt-1 text-xs text-cream/50">
+                  ({item.size}) × {item.qty}
+                </p>
+              </div>
+            </div>
+            <span className="shrink-0 text-sm font-semibold">
+              {formatRupiah(
+                String(
+                  data.quoteLineTotals?.get(item.productVariantId) ??
+                    Number.parseFloat(item.basePrice) * item.qty,
+                ),
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-6 flex items-start gap-2 border border-cream/10 bg-ink p-3.5 text-[11px] leading-relaxed text-cream/60">
+        <span aria-hidden="true" className="text-xs text-gold">
+          ♦
+        </span>
+        Setiap busana dikemas eksklusif dengan kotak premium, dust bag tahan
+        debu, dan sertifikat nomor seri autentik.
+      </p>
+    </>
+  );
+
+  const breakdown = (
+    <dl className="mt-6 flex flex-col gap-3 border-t border-cream/10 pt-5 text-xs">
+      <div className="flex justify-between text-cream/60">
+        <dt>Subtotal ({data.count} item)</dt>
+        <dd className="font-medium text-cream">
+          {formatRupiah(String(data.displaySubtotal))}
+        </dd>
+      </div>
+      <div className="flex justify-between text-cream/60">
+        <dt>
+          Biaya Pengiriman
+          <span className="block text-[10px] text-gold/80">
+            {data.selectedRate
+              ? `${data.selectedRate.courier_name} ${data.selectedRate.service_name}`
+              : data.shippingHint}
+          </span>
+        </dt>
+        <dd className="font-medium text-cream">
+          {data.selectedRate
+            ? formatRupiah(String(data.selectedRate.cost))
+            : "—"}
+        </dd>
+      </div>
+      {data.serviceFee > 0 && (
+        <div className="flex justify-between text-cream/60">
+          <dt>Biaya layanan</dt>
+          <dd className="font-medium text-cream">
+            {formatRupiah(String(data.serviceFee))}
+          </dd>
+        </div>
+      )}
+      {data.withInsurance && (
+        <div className="flex justify-between text-cream/60">
+          <dt>Asuransi pengiriman</dt>
+          <dd className="font-medium text-cream">
+            {formatRupiah(String(data.insuranceFee))}
+          </dd>
+        </div>
+      )}
+    </dl>
+  );
+
+  const totalRow = (
+    <div
+      id={`${idPrefix}-summary-total`}
+      className="mt-5 flex items-baseline justify-between border-t border-cream/10 pt-5"
+    >
+      <span className="text-xs font-medium uppercase tracking-[0.22em] text-cream/60">
+        Total Tagihan
+      </span>
+      <span className="font-serif text-2xl font-semibold tracking-wide text-gold">
+        {formatRupiah(String(data.total))}
+      </span>
+    </div>
+  );
+
+  if (variant === "sheet") {
+    return (
+      <>
+        {itemList}
+        {breakdown}
+        {totalRow}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {/* Area scroll: daftar item + catatan kemasan. data-lenis-prevent:
+          wheel di sini men-scroll daftar, tidak dibajak Lenis. */}
+      <div data-lenis-prevent className={`mt-6 ${SUMMARY_SCROLL_AREA}`}>
+        {itemList}
+      </div>
+
+      {/* Footer tetap: rincian biaya, asuransi, total, submit */}
+      <div className="shrink-0">
+        {breakdown}
+        {insuranceSlot}
+        {totalRow}
+        {footerSlot}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Checkbox asuransi pengiriman — opsional, dibayar pembeli. Teks bantu
+ * sengaja hanya menyebut nilai pertanggungan & kebijakan kurir: cakupan klaim
+ * ditentukan kurir, bukan oleh toko. State/logika tetap di CheckoutPage.
+ */
+function InsuranceOption({
+  idPrefix,
+  checked,
+  selectable,
+  selectedRate,
+  coverage,
+  onChange,
+  className = "",
+}: {
+  idPrefix: string;
+  checked: boolean;
+  selectable: boolean;
+  selectedRate: ShippingRate | null;
+  coverage: number;
+  onChange: (checked: boolean) => void;
+  className?: string;
+}) {
+  const hintId = `${idPrefix}-insurance-hint`;
+  return (
+    <div className={className}>
+      <label
+        className={[
+          "flex items-start gap-3 text-xs",
+          selectable ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+        ].join(" ")}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={!selectable}
+          aria-describedby={hintId}
+          onChange={(e) => onChange(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 accent-gold"
+        />
+        <span className="flex-1">
+          <span className="flex justify-between gap-3 text-cream/80">
+            <span>Tambah asuransi pengiriman</span>
+            {selectable && (
+              <span className="font-medium text-cream">
+                {formatRupiah(String(selectedRate?.insurance_fee ?? 0))}
+              </span>
+            )}
+          </span>
+          <span
+            id={hintId}
+            className="mt-1 block text-[11px] leading-relaxed text-cream/50"
+          >
+            {!selectedRate
+              ? "Pilih layanan pengiriman untuk melihat biaya asuransi."
+              : !selectable
+                ? "Tidak tersedia untuk layanan ini"
+                : `Nilai pertanggungan ${formatRupiah(String(coverage))}. Ketentuan klaim mengikuti kebijakan kurir.`}
+          </span>
+        </span>
+      </label>
+    </div>
+  );
+}
+
+/**
+ * Tombol submit form checkout. Dipakai di ringkasan desktop, bar mobile, dan
+ * bottom sheet — semuanya di luar <form>, terhubung lewat form="checkout-form".
+ */
+function SubmitButton({
+  disabled,
+  label,
+  className = "",
+}: {
+  disabled: boolean;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="submit"
+      form="checkout-form"
+      disabled={disabled}
+      className={[
+        "w-full rounded-full px-8 py-4 text-sm font-medium uppercase tracking-[0.2em] transition-colors",
+        disabled
+          ? "cursor-not-allowed border border-cream/20 text-cream/40"
+          : "bg-gold text-ink hover:bg-gold-dark",
+        className,
+      ].join(" ")}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -848,9 +1439,11 @@ type AreaResult =
 function AreaCombobox({
   selected,
   onChange,
+  error: fieldError,
 }: {
   selected: ShippingArea | null;
   onChange: (area: ShippingArea | null) => void;
+  error?: string;
 }) {
   const [query, setQuery] = useState(selected?.label ?? "");
   const [isOpen, setIsOpen] = useState(false);
@@ -957,6 +1550,12 @@ function AreaCombobox({
     hint = "Pilih salah satu area dari daftar.";
   }
 
+  const fieldErrorId = "area-error";
+  const describedBy =
+    [hint ? hintId : null, fieldError ? fieldErrorId : null]
+      .filter(Boolean)
+      .join(" ") || undefined;
+
   return (
     <div className="flex flex-col gap-2">
       <label
@@ -978,7 +1577,8 @@ function AreaCombobox({
           aria-activedescendant={
             activeOption ? optionId(activeIndex) : undefined
           }
-          aria-describedby={hint ? hintId : undefined}
+          aria-describedby={describedBy}
+          aria-invalid={fieldError ? true : undefined}
           value={query}
           placeholder="Ketik kecamatan, kota, atau kode pos"
           onChange={(e) => {
@@ -990,7 +1590,10 @@ function AreaCombobox({
           onFocus={() => setIsOpen(true)}
           onBlur={() => setIsOpen(false)}
           onKeyDown={handleKeyDown}
-          className="w-full rounded-sm border border-cream/20 bg-ink-soft px-4 py-3 text-sm text-cream placeholder:text-cream/40 focus:border-gold focus:outline-none"
+          className={[
+            "w-full rounded-sm border bg-ink-soft px-4 py-3 text-sm text-cream placeholder:text-cream/40 focus:border-gold focus:outline-none",
+            fieldError ? "border-red-400/60" : "border-cream/20",
+          ].join(" ")}
         />
 
         {showPanel && !showListbox && (
@@ -1053,6 +1656,11 @@ function AreaCombobox({
       {hint && (
         <p id={hintId} className="text-[11px] text-cream/50">
           {hint}
+        </p>
+      )}
+      {fieldError && (
+        <p id={fieldErrorId} className="text-[11px] text-red-300">
+          {fieldError}
         </p>
       )}
     </div>
@@ -1166,6 +1774,7 @@ function Field({
   placeholder,
   required = true,
   maxLength,
+  error,
 }: {
   id: string;
   label: string;
@@ -1175,7 +1784,9 @@ function Field({
   placeholder?: string;
   required?: boolean;
   maxLength?: number;
+  error?: string;
 }) {
+  const errorId = `${id}-error`;
   return (
     <div className="flex flex-col gap-2">
       <label
@@ -1191,9 +1802,19 @@ function Field({
         maxLength={maxLength}
         value={value}
         placeholder={placeholder}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-sm border border-cream/20 bg-ink-soft px-4 py-3 text-sm text-cream placeholder:text-cream/40 focus:border-gold focus:outline-none"
+        className={[
+          "w-full rounded-sm border bg-ink-soft px-4 py-3 text-sm text-cream placeholder:text-cream/40 focus:border-gold focus:outline-none",
+          error ? "border-red-400/60" : "border-cream/20",
+        ].join(" ")}
       />
+      {error && (
+        <p id={errorId} className="text-[11px] text-red-300">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

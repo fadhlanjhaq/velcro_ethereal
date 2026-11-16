@@ -47,6 +47,29 @@ export default function SiteHeader({
     };
   }, [shopNoticeOpen]);
 
+  // Tulis tinggi header aktual ke CSS variable --site-header-h di <html>, supaya
+  // elemen lain (mis. ringkasan sticky di checkout) bisa memakai offset yang
+  // tepat. Tinggi berubah kalau announcement bar wrap atau menu mobile dibuka,
+  // jadi diamati lewat ResizeObserver, bukan diukur sekali.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const root = document.documentElement;
+    const write = () => {
+      root.style.setProperty("--site-header-h", `${header.offsetHeight}px`);
+    };
+
+    write();
+    const observer = new ResizeObserver(write);
+    observer.observe(header);
+
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--site-header-h");
+    };
+  }, []);
+
   const isHome = pathname === "/";
 
   function handleSectionLink(

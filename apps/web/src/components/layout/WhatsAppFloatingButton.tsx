@@ -1,8 +1,13 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import { SiWhatsapp } from "react-icons/si";
 
 /**
  * Tombol WhatsApp melayang di pojok kanan bawah, muncul di semua halaman route
- * group (main). Server Component — tidak ada state/hook, cukup <a> biasa.
+ * group (main) — KECUALI /checkout, karena di sana pojok bawah dipakai bar
+ * total + tombol bayar (mobile). /checkout/payment dan /checkout/success tetap
+ * menampilkan tombol ini. Client Component hanya untuk usePathname().
  *
  * Warna sengaja memakai palet brand (gold di atas ink), BUKAN hijau WhatsApp:
  * situs ini gelap-emas sepanjang halaman dan satu-satunya elemen hijau yang
@@ -13,6 +18,9 @@ import { SiWhatsapp } from "react-icons/si";
  * nomornya belum diisi admin, layout tidak merender komponen ini sama sekali.
  */
 export default function WhatsAppFloatingButton({ href }: { href: string }) {
+  const pathname = usePathname();
+  if (pathname === "/checkout") return null;
+
   return (
     <a
       href={href}

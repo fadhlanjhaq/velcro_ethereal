@@ -1,9 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProductBySlug } from "@/lib/api";
 import PhotoFallback from "@/components/shop/PhotoFallback";
+import ProductGallery from "@/components/shop/ProductGallery";
 import ProductPurchasePanel from "@/components/shop/ProductPurchasePanel";
 
 export async function generateMetadata(
@@ -53,24 +53,14 @@ export default async function ProductDetailPage(
         </Link>
 
         <div className="mt-12 grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16">
-          {/* Galeri */}
-          <div className="flex flex-col gap-6">
+          {/* Galeri — sticky di lg (lebarnya dibatasi tinggi viewport di
+              ProductGallery supaya foto + thumbnail selalu muat). */}
+          <div className="lg:sticky lg:top-[calc(var(--site-header-h,96px)_+_24px)] lg:self-start">
             {product.images.length > 0 ? (
-              product.images.map((image, index) => (
-                <div
-                  key={image.url}
-                  className="relative aspect-[3/4] w-full overflow-hidden rounded-sm bg-ink-soft"
-                >
-                  <Image
-                    src={image.url}
-                    alt={`${product.name} — foto ${index + 1}`}
-                    fill
-                    priority={index === 0}
-                    sizes="(max-width: 1024px) 100vw, 50vw"
-                    className="object-cover"
-                  />
-                </div>
-              ))
+              <ProductGallery
+                images={product.images}
+                productName={product.name}
+              />
             ) : (
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded-sm bg-ink-soft">
                 <PhotoFallback />
@@ -79,7 +69,7 @@ export default async function ProductDetailPage(
           </div>
 
           {/* Info + pembelian */}
-          <div className="lg:sticky lg:top-24 lg:self-start">
+          <div>
             <p className="text-xs font-medium uppercase tracking-[0.4em] text-gold">
               {product.category.name}
             </p>
