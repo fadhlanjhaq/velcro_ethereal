@@ -65,6 +65,8 @@ RUN composer dump-autoload --optimize --no-dev --no-scripts
 # Stage 3: production — lean runtime image
 # ---------------------------------------------------------------------------
 FROM base AS production
+# Batas upload PHP (default image 2M/8M terlalu kecil untuk foto produk).
+COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 
 # Copy the fully built application (source + vendor) from the vendor stage.
 COPY --from=vendor /var/www/html /var/www/html

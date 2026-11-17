@@ -199,8 +199,8 @@ class ManageSiteContent extends Page
                     ->disk('public')
                     ->directory('site-content/hero')
                     ->acceptedFileTypes(['video/mp4'])
-                    ->maxSize(51200)
-                    ->helperText('MP4, maksimal 50MB.')
+                    ->maxSize(8192)
+                    ->helperText('MP4, maksimal 8MB.')
                     ->columnSpanFull(),
                 FileUpload::make('hero.poster_image')
                     ->label('Poster (fallback sebelum video jalan)')
